@@ -111,6 +111,7 @@ func main() {
 	} else {
 		log.Printf("File Opened : %s", file)
 	}
+
 	frr, err := fio.Read(ctx, &pb.DataReadRequest{FileHandle: fdr.GetFileHandle(),
 		Start: 0, Len: int32(fir.GetResponse()[0].GetSize())})
 	if err != nil {
