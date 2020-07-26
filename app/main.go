@@ -82,6 +82,26 @@ func main() {
 		log.Printf("File Info Recieved : %s", file)
 		log.Printf("File Size : %d", fir.GetResponse()[0].GetSize())
 	}
+	fsr, err := fio.Stat(ctx, &pb.FileInfoRequest{FileName: file})
+	if err != nil {
+		log.Fatalf("could not get file: %v", err)
+	}
+	if fsr.GetErrorCode() > 0 {
+		log.Printf("Error fileinfo File Code %s", fsr.GetErrorCode())
+	} else {
+		log.Printf("File Stat Recieved : %s", file)
+		log.Printf("File Size : %d", fsr.GetResponse()[0].GetSize())
+	}
+	fsr, err = fio.Stat(ctx, &pb.FileInfoRequest{FileName: "/"})
+	if err != nil {
+		log.Fatalf("could not get file: %v", err)
+	}
+	if fsr.GetErrorCode() > 0 {
+		log.Printf("Error fileinfo File Code %s", fsr.GetErrorCode())
+	} else {
+		log.Printf("File Stat Recieved : %s", fsr.GetResponse()[0].GetFileName())
+		log.Printf("File Size : %d", fsr.GetResponse()[0].GetSize())
+	}
 	fdr, err = fio.Open(ctx, &pb.FileOpenRequest{Path: file})
 	if err != nil {
 		log.Fatalf("could not make file: %v", err)
