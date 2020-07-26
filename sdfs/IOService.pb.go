@@ -1240,7 +1240,7 @@ var file_IOService_proto_rawDesc = []byte{
 	0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1e, 0x2e, 0x6f, 0x72, 0x67, 0x2e, 0x6f, 0x70,
 	0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x65, 0x72, 0x72,
 	0x6f, 0x72, 0x43, 0x6f, 0x64, 0x65, 0x73, 0x52, 0x09, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x43, 0x6f,
-	0x64, 0x65, 0x32, 0x8a, 0x08, 0x0a, 0x0d, 0x46, 0x69, 0x6c, 0x65, 0x49, 0x4f, 0x53, 0x65, 0x72,
+	0x64, 0x65, 0x32, 0xe0, 0x08, 0x0a, 0x0d, 0x46, 0x69, 0x6c, 0x65, 0x49, 0x4f, 0x53, 0x65, 0x72,
 	0x76, 0x69, 0x63, 0x65, 0x12, 0x4c, 0x0a, 0x05, 0x4d, 0x6b, 0x44, 0x69, 0x72, 0x12, 0x20, 0x2e,
 	0x6f, 0x72, 0x67, 0x2e, 0x6f, 0x70, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2e, 0x67, 0x72,
 	0x70, 0x63, 0x2e, 0x4d, 0x6b, 0x44, 0x69, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
@@ -1304,11 +1304,17 @@ var file_IOService_proto_rawDesc = []byte{
 	0x2e, 0x6f, 0x70, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e,
 	0x4d, 0x6b, 0x44, 0x69, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x21, 0x2e, 0x6f,
 	0x72, 0x67, 0x2e, 0x6f, 0x70, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2e, 0x67, 0x72, 0x70,
-	0x63, 0x2e, 0x4d, 0x6b, 0x44, 0x69, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42,
-	0x32, 0x50, 0x01, 0x5a, 0x2e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
-	0x6f, 0x70, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2f, 0x73, 0x64, 0x66, 0x73, 0x2d, 0x63,
-	0x6c, 0x69, 0x65, 0x6e, 0x74, 0x2d, 0x67, 0x6f, 0x2f, 0x73, 0x64, 0x66, 0x73, 0x2f, 0x3b, 0x73,
-	0x64, 0x66, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x63, 0x2e, 0x4d, 0x6b, 0x44, 0x69, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x54, 0x0a, 0x04, 0x53, 0x74, 0x61, 0x74, 0x12, 0x23, 0x2e, 0x6f, 0x72, 0x67, 0x2e, 0x6f, 0x70,
+	0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x46, 0x69, 0x6c,
+	0x65, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x27, 0x2e, 0x6f,
+	0x72, 0x67, 0x2e, 0x6f, 0x70, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2e, 0x67, 0x72, 0x70,
+	0x63, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x32, 0x50, 0x01, 0x5a, 0x2e, 0x67, 0x69, 0x74, 0x68, 0x75,
+	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6f, 0x70, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x75, 0x70, 0x2f,
+	0x73, 0x64, 0x66, 0x73, 0x2d, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x2d, 0x67, 0x6f, 0x2f, 0x73,
+	0x64, 0x66, 0x73, 0x2f, 0x3b, 0x73, 0x64, 0x66, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -1372,20 +1378,22 @@ var file_IOService_proto_depIdxs = []int32{
 	18, // 19: org.opendedup.grpc.FileIOService.CreateCopy:input_type -> org.opendedup.grpc.FileSnapshotRequest
 	15, // 20: org.opendedup.grpc.FileIOService.FileExists:input_type -> org.opendedup.grpc.FileExistsRequest
 	2,  // 21: org.opendedup.grpc.FileIOService.MkDirAll:input_type -> org.opendedup.grpc.MkDirRequest
-	3,  // 22: org.opendedup.grpc.FileIOService.MkDir:output_type -> org.opendedup.grpc.MkDirResponse
-	5,  // 23: org.opendedup.grpc.FileIOService.RmDir:output_type -> org.opendedup.grpc.RmDirResponse
-	7,  // 24: org.opendedup.grpc.FileIOService.Unlink:output_type -> org.opendedup.grpc.UnlinkResponse
-	1,  // 25: org.opendedup.grpc.FileIOService.Write:output_type -> org.opendedup.grpc.DataWriteResponse
-	9,  // 26: org.opendedup.grpc.FileIOService.Read:output_type -> org.opendedup.grpc.DataReadResponse
-	11, // 27: org.opendedup.grpc.FileIOService.Release:output_type -> org.opendedup.grpc.FileCloseResponse
-	13, // 28: org.opendedup.grpc.FileIOService.Mknod:output_type -> org.opendedup.grpc.MkNodResponse
-	17, // 29: org.opendedup.grpc.FileIOService.Open:output_type -> org.opendedup.grpc.FileOpenResponse
-	22, // 30: org.opendedup.grpc.FileIOService.GetFileInfo:output_type -> org.opendedup.grpc.FileMessageResponse
-	19, // 31: org.opendedup.grpc.FileIOService.CreateCopy:output_type -> org.opendedup.grpc.FileSnapshotResponse
-	16, // 32: org.opendedup.grpc.FileIOService.FileExists:output_type -> org.opendedup.grpc.FileExistsResponse
-	3,  // 33: org.opendedup.grpc.FileIOService.MkDirAll:output_type -> org.opendedup.grpc.MkDirResponse
-	22, // [22:34] is the sub-list for method output_type
-	10, // [10:22] is the sub-list for method input_type
+	21, // 22: org.opendedup.grpc.FileIOService.Stat:input_type -> org.opendedup.grpc.FileInfoRequest
+	3,  // 23: org.opendedup.grpc.FileIOService.MkDir:output_type -> org.opendedup.grpc.MkDirResponse
+	5,  // 24: org.opendedup.grpc.FileIOService.RmDir:output_type -> org.opendedup.grpc.RmDirResponse
+	7,  // 25: org.opendedup.grpc.FileIOService.Unlink:output_type -> org.opendedup.grpc.UnlinkResponse
+	1,  // 26: org.opendedup.grpc.FileIOService.Write:output_type -> org.opendedup.grpc.DataWriteResponse
+	9,  // 27: org.opendedup.grpc.FileIOService.Read:output_type -> org.opendedup.grpc.DataReadResponse
+	11, // 28: org.opendedup.grpc.FileIOService.Release:output_type -> org.opendedup.grpc.FileCloseResponse
+	13, // 29: org.opendedup.grpc.FileIOService.Mknod:output_type -> org.opendedup.grpc.MkNodResponse
+	17, // 30: org.opendedup.grpc.FileIOService.Open:output_type -> org.opendedup.grpc.FileOpenResponse
+	22, // 31: org.opendedup.grpc.FileIOService.GetFileInfo:output_type -> org.opendedup.grpc.FileMessageResponse
+	19, // 32: org.opendedup.grpc.FileIOService.CreateCopy:output_type -> org.opendedup.grpc.FileSnapshotResponse
+	16, // 33: org.opendedup.grpc.FileIOService.FileExists:output_type -> org.opendedup.grpc.FileExistsResponse
+	3,  // 34: org.opendedup.grpc.FileIOService.MkDirAll:output_type -> org.opendedup.grpc.MkDirResponse
+	22, // 35: org.opendedup.grpc.FileIOService.Stat:output_type -> org.opendedup.grpc.FileMessageResponse
+	23, // [23:36] is the sub-list for method output_type
+	10, // [10:23] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
 	10, // [10:10] is the sub-list for extension extendee
 	0,  // [0:10] is the sub-list for field type_name
@@ -1684,6 +1692,7 @@ type FileIOServiceClient interface {
 	CreateCopy(ctx context.Context, in *FileSnapshotRequest, opts ...grpc.CallOption) (*FileSnapshotResponse, error)
 	FileExists(ctx context.Context, in *FileExistsRequest, opts ...grpc.CallOption) (*FileExistsResponse, error)
 	MkDirAll(ctx context.Context, in *MkDirRequest, opts ...grpc.CallOption) (*MkDirResponse, error)
+	Stat(ctx context.Context, in *FileInfoRequest, opts ...grpc.CallOption) (*FileMessageResponse, error)
 }
 
 type fileIOServiceClient struct {
@@ -1802,6 +1811,15 @@ func (c *fileIOServiceClient) MkDirAll(ctx context.Context, in *MkDirRequest, op
 	return out, nil
 }
 
+func (c *fileIOServiceClient) Stat(ctx context.Context, in *FileInfoRequest, opts ...grpc.CallOption) (*FileMessageResponse, error) {
+	out := new(FileMessageResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Stat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FileIOServiceServer is the server API for FileIOService service.
 type FileIOServiceServer interface {
 	// Define a RPC operation
@@ -1817,6 +1835,7 @@ type FileIOServiceServer interface {
 	CreateCopy(context.Context, *FileSnapshotRequest) (*FileSnapshotResponse, error)
 	FileExists(context.Context, *FileExistsRequest) (*FileExistsResponse, error)
 	MkDirAll(context.Context, *MkDirRequest) (*MkDirResponse, error)
+	Stat(context.Context, *FileInfoRequest) (*FileMessageResponse, error)
 }
 
 // UnimplementedFileIOServiceServer can be embedded to have forward compatible implementations.
@@ -1858,6 +1877,9 @@ func (*UnimplementedFileIOServiceServer) FileExists(context.Context, *FileExists
 }
 func (*UnimplementedFileIOServiceServer) MkDirAll(context.Context, *MkDirRequest) (*MkDirResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MkDirAll not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Stat(context.Context, *FileInfoRequest) (*FileMessageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Stat not implemented")
 }
 
 func RegisterFileIOServiceServer(s *grpc.Server, srv FileIOServiceServer) {
@@ -2080,6 +2102,24 @@ func _FileIOService_MkDirAll_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileIOService_Stat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FileInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Stat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Stat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Stat(ctx, req.(*FileInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _FileIOService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.FileIOService",
 	HandlerType: (*FileIOServiceServer)(nil),
@@ -2131,6 +2171,10 @@ var _FileIOService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MkDirAll",
 			Handler:    _FileIOService_MkDirAll_Handler,
+		},
+		{
+			MethodName: "Stat",
+			Handler:    _FileIOService_Stat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
