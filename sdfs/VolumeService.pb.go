@@ -401,7 +401,7 @@ type SystemInfo struct {
 func (x *SystemInfo) Reset() {
 	*x = SystemInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_VolumeService_proto_msgTypes[2]
+		mi := &file_VolumeService_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
