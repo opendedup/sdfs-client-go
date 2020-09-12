@@ -18,6 +18,19 @@ const _ = grpc.SupportPackageIsVersion6
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FileIOServiceClient interface {
 	// Define a RPC operation
+	GetXAttrSize(ctx context.Context, in *GetXAttrSizeRequest, opts ...grpc.CallOption) (*GetXAttrSizeResponse, error)
+	Fsync(ctx context.Context, in *FsyncRequest, opts ...grpc.CallOption) (*FsyncResponse, error)
+	SetXAttr(ctx context.Context, in *SetXAttrRequest, opts ...grpc.CallOption) (*SetXAttrResponse, error)
+	RemoveXAttr(ctx context.Context, in *RemoveXAttrRequest, opts ...grpc.CallOption) (*RemoveXAttrResponse, error)
+	GetXAttr(ctx context.Context, in *GetXAttrRequest, opts ...grpc.CallOption) (*GetXAttrResponse, error)
+	Utime(ctx context.Context, in *UtimeRequest, opts ...grpc.CallOption) (*UtimeResponse, error)
+	Truncate(ctx context.Context, in *TruncateRequest, opts ...grpc.CallOption) (*TruncateResponse, error)
+	SymLink(ctx context.Context, in *SymLinkRequest, opts ...grpc.CallOption) (*SymLinkResponse, error)
+	ReadLink(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error)
+	GetAttr(ctx context.Context, in *StatRequest, opts ...grpc.CallOption) (*StatResponse, error)
+	Flush(ctx context.Context, in *FlushRequest, opts ...grpc.CallOption) (*FlushResponse, error)
+	Chown(ctx context.Context, in *ChownRequest, opts ...grpc.CallOption) (*ChownResponse, error)
+	Chmod(ctx context.Context, in *ChmodRequest, opts ...grpc.CallOption) (*ChmodResponse, error)
 	MkDir(ctx context.Context, in *MkDirRequest, opts ...grpc.CallOption) (*MkDirResponse, error)
 	RmDir(ctx context.Context, in *RmDirRequest, opts ...grpc.CallOption) (*RmDirResponse, error)
 	Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error)
@@ -34,6 +47,8 @@ type FileIOServiceClient interface {
 	Rename(ctx context.Context, in *FileRenameRequest, opts ...grpc.CallOption) (*FileRenameResponse, error)
 	CopyExtent(ctx context.Context, in *CopyExtentRequest, opts ...grpc.CallOption) (*CopyExtentResponse, error)
 	SetUserMetaData(ctx context.Context, in *SetUserMetaDataRequest, opts ...grpc.CallOption) (*SetUserMetaDataResponse, error)
+	GetCloudFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
+	GetCloudMetaFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
 }
 
 type fileIOServiceClient struct {
@@ -42,6 +57,123 @@ type fileIOServiceClient struct {
 
 func NewFileIOServiceClient(cc grpc.ClientConnInterface) FileIOServiceClient {
 	return &fileIOServiceClient{cc}
+}
+
+func (c *fileIOServiceClient) GetXAttrSize(ctx context.Context, in *GetXAttrSizeRequest, opts ...grpc.CallOption) (*GetXAttrSizeResponse, error) {
+	out := new(GetXAttrSizeResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/GetXAttrSize", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) Fsync(ctx context.Context, in *FsyncRequest, opts ...grpc.CallOption) (*FsyncResponse, error) {
+	out := new(FsyncResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Fsync", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) SetXAttr(ctx context.Context, in *SetXAttrRequest, opts ...grpc.CallOption) (*SetXAttrResponse, error) {
+	out := new(SetXAttrResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/SetXAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) RemoveXAttr(ctx context.Context, in *RemoveXAttrRequest, opts ...grpc.CallOption) (*RemoveXAttrResponse, error) {
+	out := new(RemoveXAttrResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/RemoveXAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) GetXAttr(ctx context.Context, in *GetXAttrRequest, opts ...grpc.CallOption) (*GetXAttrResponse, error) {
+	out := new(GetXAttrResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/GetXAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) Utime(ctx context.Context, in *UtimeRequest, opts ...grpc.CallOption) (*UtimeResponse, error) {
+	out := new(UtimeResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Utime", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) Truncate(ctx context.Context, in *TruncateRequest, opts ...grpc.CallOption) (*TruncateResponse, error) {
+	out := new(TruncateResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Truncate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) SymLink(ctx context.Context, in *SymLinkRequest, opts ...grpc.CallOption) (*SymLinkResponse, error) {
+	out := new(SymLinkResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/SymLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) ReadLink(ctx context.Context, in *LinkRequest, opts ...grpc.CallOption) (*LinkResponse, error) {
+	out := new(LinkResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/ReadLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) GetAttr(ctx context.Context, in *StatRequest, opts ...grpc.CallOption) (*StatResponse, error) {
+	out := new(StatResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/GetAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) Flush(ctx context.Context, in *FlushRequest, opts ...grpc.CallOption) (*FlushResponse, error) {
+	out := new(FlushResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Flush", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) Chown(ctx context.Context, in *ChownRequest, opts ...grpc.CallOption) (*ChownResponse, error) {
+	out := new(ChownResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Chown", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) Chmod(ctx context.Context, in *ChmodRequest, opts ...grpc.CallOption) (*ChmodResponse, error) {
+	out := new(ChmodResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Chmod", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *fileIOServiceClient) MkDir(ctx context.Context, in *MkDirRequest, opts ...grpc.CallOption) (*MkDirResponse, error) {
@@ -188,11 +320,42 @@ func (c *fileIOServiceClient) SetUserMetaData(ctx context.Context, in *SetUserMe
 	return out, nil
 }
 
+func (c *fileIOServiceClient) GetCloudFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error) {
+	out := new(GetCloudFileResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/GetCloudFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) GetCloudMetaFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error) {
+	out := new(GetCloudFileResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/GetCloudMetaFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FileIOServiceServer is the server API for FileIOService service.
 // All implementations must embed UnimplementedFileIOServiceServer
 // for forward compatibility
 type FileIOServiceServer interface {
 	// Define a RPC operation
+	GetXAttrSize(context.Context, *GetXAttrSizeRequest) (*GetXAttrSizeResponse, error)
+	Fsync(context.Context, *FsyncRequest) (*FsyncResponse, error)
+	SetXAttr(context.Context, *SetXAttrRequest) (*SetXAttrResponse, error)
+	RemoveXAttr(context.Context, *RemoveXAttrRequest) (*RemoveXAttrResponse, error)
+	GetXAttr(context.Context, *GetXAttrRequest) (*GetXAttrResponse, error)
+	Utime(context.Context, *UtimeRequest) (*UtimeResponse, error)
+	Truncate(context.Context, *TruncateRequest) (*TruncateResponse, error)
+	SymLink(context.Context, *SymLinkRequest) (*SymLinkResponse, error)
+	ReadLink(context.Context, *LinkRequest) (*LinkResponse, error)
+	GetAttr(context.Context, *StatRequest) (*StatResponse, error)
+	Flush(context.Context, *FlushRequest) (*FlushResponse, error)
+	Chown(context.Context, *ChownRequest) (*ChownResponse, error)
+	Chmod(context.Context, *ChmodRequest) (*ChmodResponse, error)
 	MkDir(context.Context, *MkDirRequest) (*MkDirResponse, error)
 	RmDir(context.Context, *RmDirRequest) (*RmDirResponse, error)
 	Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error)
@@ -209,6 +372,8 @@ type FileIOServiceServer interface {
 	Rename(context.Context, *FileRenameRequest) (*FileRenameResponse, error)
 	CopyExtent(context.Context, *CopyExtentRequest) (*CopyExtentResponse, error)
 	SetUserMetaData(context.Context, *SetUserMetaDataRequest) (*SetUserMetaDataResponse, error)
+	GetCloudFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
+	GetCloudMetaFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
 	mustEmbedUnimplementedFileIOServiceServer()
 }
 
@@ -216,6 +381,45 @@ type FileIOServiceServer interface {
 type UnimplementedFileIOServiceServer struct {
 }
 
+func (*UnimplementedFileIOServiceServer) GetXAttrSize(context.Context, *GetXAttrSizeRequest) (*GetXAttrSizeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetXAttrSize not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Fsync(context.Context, *FsyncRequest) (*FsyncResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Fsync not implemented")
+}
+func (*UnimplementedFileIOServiceServer) SetXAttr(context.Context, *SetXAttrRequest) (*SetXAttrResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetXAttr not implemented")
+}
+func (*UnimplementedFileIOServiceServer) RemoveXAttr(context.Context, *RemoveXAttrRequest) (*RemoveXAttrResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveXAttr not implemented")
+}
+func (*UnimplementedFileIOServiceServer) GetXAttr(context.Context, *GetXAttrRequest) (*GetXAttrResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetXAttr not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Utime(context.Context, *UtimeRequest) (*UtimeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Utime not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Truncate(context.Context, *TruncateRequest) (*TruncateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Truncate not implemented")
+}
+func (*UnimplementedFileIOServiceServer) SymLink(context.Context, *SymLinkRequest) (*SymLinkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SymLink not implemented")
+}
+func (*UnimplementedFileIOServiceServer) ReadLink(context.Context, *LinkRequest) (*LinkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadLink not implemented")
+}
+func (*UnimplementedFileIOServiceServer) GetAttr(context.Context, *StatRequest) (*StatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAttr not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Flush(context.Context, *FlushRequest) (*FlushResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Flush not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Chown(context.Context, *ChownRequest) (*ChownResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Chown not implemented")
+}
+func (*UnimplementedFileIOServiceServer) Chmod(context.Context, *ChmodRequest) (*ChmodResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Chmod not implemented")
+}
 func (*UnimplementedFileIOServiceServer) MkDir(context.Context, *MkDirRequest) (*MkDirResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MkDir not implemented")
 }
@@ -264,10 +468,250 @@ func (*UnimplementedFileIOServiceServer) CopyExtent(context.Context, *CopyExtent
 func (*UnimplementedFileIOServiceServer) SetUserMetaData(context.Context, *SetUserMetaDataRequest) (*SetUserMetaDataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetUserMetaData not implemented")
 }
+func (*UnimplementedFileIOServiceServer) GetCloudFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCloudFile not implemented")
+}
+func (*UnimplementedFileIOServiceServer) GetCloudMetaFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCloudMetaFile not implemented")
+}
 func (*UnimplementedFileIOServiceServer) mustEmbedUnimplementedFileIOServiceServer() {}
 
 func RegisterFileIOServiceServer(s *grpc.Server, srv FileIOServiceServer) {
 	s.RegisterService(&_FileIOService_serviceDesc, srv)
+}
+
+func _FileIOService_GetXAttrSize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetXAttrSizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).GetXAttrSize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/GetXAttrSize",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).GetXAttrSize(ctx, req.(*GetXAttrSizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_Fsync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FsyncRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Fsync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Fsync",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Fsync(ctx, req.(*FsyncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_SetXAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetXAttrRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).SetXAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/SetXAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).SetXAttr(ctx, req.(*SetXAttrRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_RemoveXAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveXAttrRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).RemoveXAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/RemoveXAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).RemoveXAttr(ctx, req.(*RemoveXAttrRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_GetXAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetXAttrRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).GetXAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/GetXAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).GetXAttr(ctx, req.(*GetXAttrRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_Utime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UtimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Utime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Utime",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Utime(ctx, req.(*UtimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_Truncate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TruncateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Truncate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Truncate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Truncate(ctx, req.(*TruncateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_SymLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SymLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).SymLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/SymLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).SymLink(ctx, req.(*SymLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_ReadLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).ReadLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/ReadLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).ReadLink(ctx, req.(*LinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_GetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).GetAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/GetAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).GetAttr(ctx, req.(*StatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_Flush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FlushRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Flush(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Flush",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Flush(ctx, req.(*FlushRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_Chown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Chown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Chown",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Chown(ctx, req.(*ChownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_Chmod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChmodRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).Chmod(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/Chmod",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).Chmod(ctx, req.(*ChmodRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _FileIOService_MkDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -558,10 +1002,98 @@ func _FileIOService_SetUserMetaData_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileIOService_GetCloudFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCloudFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).GetCloudFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/GetCloudFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).GetCloudFile(ctx, req.(*GetCloudFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_GetCloudMetaFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCloudFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).GetCloudMetaFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/GetCloudMetaFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).GetCloudMetaFile(ctx, req.(*GetCloudFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _FileIOService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.FileIOService",
 	HandlerType: (*FileIOServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetXAttrSize",
+			Handler:    _FileIOService_GetXAttrSize_Handler,
+		},
+		{
+			MethodName: "Fsync",
+			Handler:    _FileIOService_Fsync_Handler,
+		},
+		{
+			MethodName: "SetXAttr",
+			Handler:    _FileIOService_SetXAttr_Handler,
+		},
+		{
+			MethodName: "RemoveXAttr",
+			Handler:    _FileIOService_RemoveXAttr_Handler,
+		},
+		{
+			MethodName: "GetXAttr",
+			Handler:    _FileIOService_GetXAttr_Handler,
+		},
+		{
+			MethodName: "Utime",
+			Handler:    _FileIOService_Utime_Handler,
+		},
+		{
+			MethodName: "Truncate",
+			Handler:    _FileIOService_Truncate_Handler,
+		},
+		{
+			MethodName: "SymLink",
+			Handler:    _FileIOService_SymLink_Handler,
+		},
+		{
+			MethodName: "ReadLink",
+			Handler:    _FileIOService_ReadLink_Handler,
+		},
+		{
+			MethodName: "GetAttr",
+			Handler:    _FileIOService_GetAttr_Handler,
+		},
+		{
+			MethodName: "Flush",
+			Handler:    _FileIOService_Flush_Handler,
+		},
+		{
+			MethodName: "Chown",
+			Handler:    _FileIOService_Chown_Handler,
+		},
+		{
+			MethodName: "Chmod",
+			Handler:    _FileIOService_Chmod_Handler,
+		},
 		{
 			MethodName: "MkDir",
 			Handler:    _FileIOService_MkDir_Handler,
@@ -625,6 +1157,14 @@ var _FileIOService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetUserMetaData",
 			Handler:    _FileIOService_SetUserMetaData_Handler,
+		},
+		{
+			MethodName: "GetCloudFile",
+			Handler:    _FileIOService_GetCloudFile_Handler,
+		},
+		{
+			MethodName: "GetCloudMetaFile",
+			Handler:    _FileIOService_GetCloudMetaFile_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
