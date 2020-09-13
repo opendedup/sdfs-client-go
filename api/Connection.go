@@ -367,7 +367,6 @@ func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcSta
 		log.Print(err)
 		return 0, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return 0, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Written, nil
@@ -380,10 +379,21 @@ func (n *SdfsConnection) StatFS(ctx context.Context) (stat *spb.StatFS, err erro
 		log.Print(err)
 		return stat, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return stat, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Stat, nil
+}
+
+//Rename renames a file
+func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error) {
+	fi, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: src, Dest: dst})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
 }
 
 //CopyFile creates a snapshop of a give source to a given destination
