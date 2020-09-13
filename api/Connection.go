@@ -373,6 +373,19 @@ func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcSta
 	return fi.Written, nil
 }
 
+//StatFS Gets Filesystem in Typical OS Stat Format
+func (n *SdfsConnection) StatFS(ctx context.Context) (stat *spb.StatFS, err error) {
+	fi, err := n.fc.StatFS(ctx, &spb.StatFSRequest{})
+	if err != nil {
+		log.Print(err)
+		return stat, err
+	} else if fi.GetErrorCode() > 0 {
+		log.Print(err)
+		return stat, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return fi.Stat, nil
+}
+
 //CopyFile creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnImmediately bool) (event *spb.SDFSEvent, err error) {
 	fi, err := n.fc.CreateCopy(ctx, &spb.FileSnapshotRequest{

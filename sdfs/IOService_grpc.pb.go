@@ -49,6 +49,7 @@ type FileIOServiceClient interface {
 	SetUserMetaData(ctx context.Context, in *SetUserMetaDataRequest, opts ...grpc.CallOption) (*SetUserMetaDataResponse, error)
 	GetCloudFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
 	GetCloudMetaFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
+	StatFS(ctx context.Context, in *StatFSRequest, opts ...grpc.CallOption) (*StatFSResponse, error)
 }
 
 type fileIOServiceClient struct {
@@ -338,6 +339,15 @@ func (c *fileIOServiceClient) GetCloudMetaFile(ctx context.Context, in *GetCloud
 	return out, nil
 }
 
+func (c *fileIOServiceClient) StatFS(ctx context.Context, in *StatFSRequest, opts ...grpc.CallOption) (*StatFSResponse, error) {
+	out := new(StatFSResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/StatFS", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FileIOServiceServer is the server API for FileIOService service.
 // All implementations must embed UnimplementedFileIOServiceServer
 // for forward compatibility
@@ -374,6 +384,7 @@ type FileIOServiceServer interface {
 	SetUserMetaData(context.Context, *SetUserMetaDataRequest) (*SetUserMetaDataResponse, error)
 	GetCloudFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
 	GetCloudMetaFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
+	StatFS(context.Context, *StatFSRequest) (*StatFSResponse, error)
 	mustEmbedUnimplementedFileIOServiceServer()
 }
 
@@ -473,6 +484,9 @@ func (*UnimplementedFileIOServiceServer) GetCloudFile(context.Context, *GetCloud
 }
 func (*UnimplementedFileIOServiceServer) GetCloudMetaFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCloudMetaFile not implemented")
+}
+func (*UnimplementedFileIOServiceServer) StatFS(context.Context, *StatFSRequest) (*StatFSResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StatFS not implemented")
 }
 func (*UnimplementedFileIOServiceServer) mustEmbedUnimplementedFileIOServiceServer() {}
 
@@ -1038,6 +1052,24 @@ func _FileIOService_GetCloudMetaFile_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileIOService_StatFS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatFSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).StatFS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/StatFS",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).StatFS(ctx, req.(*StatFSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _FileIOService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.FileIOService",
 	HandlerType: (*FileIOServiceServer)(nil),
@@ -1165,6 +1197,10 @@ var _FileIOService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCloudMetaFile",
 			Handler:    _FileIOService_GetCloudMetaFile_Handler,
+		},
+		{
+			MethodName: "StatFS",
+			Handler:    _FileIOService_StatFS_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
