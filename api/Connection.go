@@ -360,6 +360,19 @@ func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 	return nil
 }
 
+//CopyExtent creates a snapshop of a give source to a given destination
+func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcStart, dstStart, len int64) (err error) {
+	fi, err := n.fc.CopyExtent(ctx, &spb.CopyExtentRequest{SrcFile: src, DstFile: dst, SrcStart: srcStart, DstStart: dstStart, Length: len})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		log.Print(err)
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
 //CopyFile creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnImmediately bool) (event *spb.SDFSEvent, err error) {
 	fi, err := n.fc.CreateCopy(ctx, &spb.FileSnapshotRequest{
