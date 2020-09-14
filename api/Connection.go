@@ -335,16 +335,16 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 }
 
 //ListDir lists a directory
-func (n *SdfsConnection) ListDir(ctx context.Context, path string) ([]*spb.FileInfoResponse, error) {
+func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compact bool) (string, []*spb.FileInfoResponse, error) {
 	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: path, NumberOfFiles: 1000000, Compact: false})
 	if err != nil {
 		log.Print(err)
-		return nil, err
+		return "", nil, err
 	} else if fi.GetErrorCode() > 0 {
 		log.Print(err)
-		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		return "", nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	return fi.GetResponse(), nil
+	return fi.ListGuid, fi.GetResponse(), nil
 }
 
 //DeleteFile removes a given file
