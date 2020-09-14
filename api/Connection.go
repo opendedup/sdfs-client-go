@@ -690,7 +690,7 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 }
 
 //MkNod makes a given file
-func (n *SdfsConnection) MkNod(ctx context.Context, path string, int32 mode, int32 rdev) (err error) {
+func (n *SdfsConnection) MkNod(ctx context.Context, path string, mode, rdev int32) (err error) {
 	fi, err := n.fc.Mknod(ctx, &spb.MkNodRequest{Path: path, Mode: mode, Rdev: rdev})
 	if err != nil {
 		log.Print(err)
@@ -703,8 +703,8 @@ func (n *SdfsConnection) MkNod(ctx context.Context, path string, int32 mode, int
 }
 
 //Open opens a given file
-func (n *SdfsConnection) Open(ctx context.Context, path string) (fh int64, err error) {
-	fi, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: path})
+func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh int64, err error) {
+	fi, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: path, Flags: flags})
 	if err != nil {
 		log.Print(err)
 		return fh, err
