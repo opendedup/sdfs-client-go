@@ -294,8 +294,8 @@ func (n *SdfsConnection) RmDir(ctx context.Context, path string) error {
 }
 
 //MkDir makes a given directory
-func (n *SdfsConnection) MkDir(ctx context.Context, path string) error {
-	rc, err := n.fc.MkDir(ctx, &spb.MkDirRequest{Path: path})
+func (n *SdfsConnection) MkDir(ctx context.Context, path string, mode int32) error {
+	rc, err := n.fc.MkDir(ctx, &spb.MkDirRequest{Path: path, Mode: mode})
 	if err != nil {
 		log.Print(err)
 		return err
