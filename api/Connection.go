@@ -336,7 +336,7 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 
 //ListDir lists a directory
 func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compact bool, returnsz int32) (string, []*spb.FileInfoResponse, error) {
-	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: path, NumberOfFiles: returnsz, Compact: false})
+	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: path, NumberOfFiles: returnsz, Compact: false, ListGuid: marker})
 	if err != nil {
 		log.Print(err)
 		return "", nil, err
