@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
+	"os/user"
 	"strconv"
 	"strings"
 
@@ -82,9 +85,16 @@ func IsFlagPassed(name string, flagset *flag.FlagSet) bool {
 //ParseAndConnect Parse Arguents and Connect to Volume
 func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	pwd := flagSet.String("pwd", "Password", "The Password for the Volume")
-	address := flagSet.String("address", "sdfss://localhost:50051", "The Password for the Volume")
+	address := flagSet.String("address", "sdfss://localhost:6442", "The Password for the Volume")
 	disableTrust := flagSet.Bool("trust-all", false, "Trust Self Signed TLS Certs")
 	flagSet.Parse(os.Args[2:])
+	if !IsFlagPassed("address", flagSet) {
+		address, err := getAddress()
+		if err != nil {
+			fmt.Printf("Unable to connect to %v error: %v\n", address, err)
+			os.Exit(1)
+		}
+	}
 	if IsFlagPassed("pwd", flagSet) {
 		pb.UserName = "admin"
 		pb.Password = *pwd
@@ -100,4 +110,52 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	}
 
 	return connection
+}
+
+//SdfsURL parses the credentials json and returns the url
+type SdfsURL struct {
+	URL string `json:"url"`
+}
+
+func getAddress() (url string, err error) {
+
+	user, err := user.Current()
+	if err != nil {
+		return url, err
+	}
+	filepath := user.HomeDir + "/.sdfs/credentials.json"
+	url, _ = os.LookupEnv("SDFS_URL")
+	epath, eok := os.LookupEnv("SDFS_CREDENTIALS_PATH")
+	if len(url) > 0 {
+		return url, nil
+	} else if eok {
+		filepath = epath
+	}
+	_, err = os.Stat(filepath)
+	if os.IsNotExist(err) {
+		url = "sdfss://localhost:6442"
+		return url, nil
+	}
+	jsonFile, err := os.Open(filepath)
+	if err != nil {
+		return url, err
+	}
+	// we initialize our Users array
+	var jurl SdfsURL
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return url, err
+	}
+	err = json.Unmarshal(byteValue, &jurl)
+	if err != nil {
+		fmt.Printf("unable to parse %s", filepath)
+		return url, err
+	}
+	if (len(jurl.URL)) > 0 {
+		url = jurl.URL
+	} else {
+		url = "sdfss://localhost:6442"
+	}
+
+	return url, nil
 }

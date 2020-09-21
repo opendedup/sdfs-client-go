@@ -37,7 +37,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	}
 	if IsFlagPassed("list", flagSet) {
 
-		fInfo, err := connection.ListDir(ctx, *linfo)
+		_, fInfo, err := connection.ListDir(ctx, *linfo, "", false, int32(1000000))
 		if err != nil {
 			fmt.Printf("Unable to get file info for: %v error: %v\n", *linfo, err)
 			os.Exit(1)
@@ -77,7 +77,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	if IsFlagPassed("file-detail", flagSet) {
 
-		fInfo, err := connection.ListDir(ctx, *finfo)
+		_, fInfo, err := connection.ListDir(ctx, *finfo, "", false, int32(1000000))
 		if err != nil {
 			fmt.Printf("Unable to get file info for: %v error: %v\n", *finfo, err)
 			os.Exit(1)
@@ -141,7 +141,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	if IsFlagPassed("file-attributes", flagSet) {
 
-		fInfo, err := connection.ListDir(ctx, *fattr)
+		_, fInfo, err := connection.ListDir(ctx, *fattr, "", false, int32(1000000))
 		if err != nil {
 			fmt.Printf("Unable to get file info for: %v error: %v\n", *fattr, err)
 			os.Exit(1)
@@ -167,7 +167,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	if IsFlagPassed("file-io", flagSet) {
 
-		fInfo, err := connection.ListDir(ctx, *fio)
+		_, fInfo, err := connection.ListDir(ctx, *fio, "", false, int32(1000000))
 		if err != nil {
 			fmt.Printf("Unable to get file info for: %v error: %v\n", *fio, err)
 			os.Exit(1)

@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"path"
 	"strings"
+	"time"
 
 	uuid "github.com/google/uuid"
 	xnet "github.com/minio/minio/pkg/net"
@@ -201,18 +202,28 @@ func getCredentials() (username string, password string, disabletrust bool, err 
 	} else if eok {
 		filepath = epath
 	}
-
+	_, err = os.Stat(filepath)
+	if os.IsNotExist(err) {
+		return username, password, disabletrust, nil
+	}
 	jsonFile, err := os.Open(filepath)
 	if err != nil {
 		return username, password, disabletrust, err
 	}
 	// we initialize our Users array
+
 	var creds Credentials
+
 	byteValue, err := ioutil.ReadAll(jsonFile)
+
 	if err != nil {
 		return username, password, disabletrust, err
 	}
-	json.Unmarshal(byteValue, &creds)
+	err = json.Unmarshal(byteValue, &creds)
+	if err != nil {
+		fmt.Printf("unable to parse %s", filepath)
+		return username, password, disabletrust, err
+	}
 	if !disabletrust && creds.Disabletrust {
 		disabletrust = creds.Disabletrust
 	}
@@ -250,6 +261,8 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Not able to read credentials. %s", err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	defer cancel()
 	if useSSL == true {
 		config := &tls.Config{}
 		if disabletrust {
@@ -257,10 +270,10 @@ func NewConnection(path string) (*SdfsConnection, error) {
 				InsecureSkipVerify: true,
 			}
 		}
-		conn, err = grpc.Dial(address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 
 	} else {
-		conn, err = grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor))
 	}
 
 	if err != nil {
@@ -269,6 +282,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 
 	vc := spb.NewVolumeServiceClient(conn)
+	vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 
@@ -286,7 +300,6 @@ func (n *SdfsConnection) RmDir(ctx context.Context, path string) error {
 		log.Print(err)
 		return err
 	} else if rc.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
 	} else {
 		return nil
@@ -300,7 +313,6 @@ func (n *SdfsConnection) MkDir(ctx context.Context, path string, mode int32) err
 		log.Print(err)
 		return err
 	} else if rc.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
 	} else {
 		return nil
@@ -314,7 +326,6 @@ func (n *SdfsConnection) MkDirAll(ctx context.Context, path string) error {
 		log.Print(err)
 		return err
 	} else if rc.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
 	} else {
 		return nil
@@ -328,7 +339,6 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.GetResponse()[0], nil
@@ -341,7 +351,6 @@ func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compa
 		log.Print(err)
 		return "", nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return "", nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.ListGuid, fi.GetResponse(), nil
@@ -354,7 +363,6 @@ func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -406,7 +414,6 @@ func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnIm
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -435,7 +442,6 @@ func (n *SdfsConnection) ListEvents(ctx context.Context) ([]*spb.SDFSEvent, erro
 		log.Printf("unable to list events %v \n", err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Events, nil
@@ -459,7 +465,6 @@ func (n *SdfsConnection) WaitForEvent(ctx context.Context, eventid string) (*spb
 			log.Print(err)
 			return nil, err
 		} else if fi.GetErrorCode() > 0 {
-			log.Print(err)
 			return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 		}
 		if fi.Event.EndTime > 0 {
@@ -475,7 +480,6 @@ func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path string) (int32, 
 		log.Print(err)
 		return 0, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return 0, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Length, nil
@@ -488,7 +492,6 @@ func (n *SdfsConnection) Fsync(ctx context.Context, path string, fh int64) error
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -501,7 +504,6 @@ func (n *SdfsConnection) SetXAttr(ctx context.Context, key, value, path string) 
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -514,7 +516,6 @@ func (n *SdfsConnection) RemoveXAttr(ctx context.Context, key, path string) erro
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -527,7 +528,6 @@ func (n *SdfsConnection) GetXAttr(ctx context.Context, key, path string) (value 
 		log.Print(err)
 		return value, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return value, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Value, nil
@@ -540,7 +540,6 @@ func (n *SdfsConnection) Utime(ctx context.Context, path string, atime, mtime in
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -553,7 +552,6 @@ func (n *SdfsConnection) Truncate(ctx context.Context, path string, length int64
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -566,7 +564,6 @@ func (n *SdfsConnection) SymLink(ctx context.Context, src, dst string) (err erro
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -579,7 +576,6 @@ func (n *SdfsConnection) ReadLink(ctx context.Context, path string) (linkpath st
 		log.Print(err)
 		return linkpath, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return linkpath, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.LinkPath, nil
@@ -592,7 +588,6 @@ func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.St
 		log.Print(err)
 		return stat, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return stat, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Stat, nil
@@ -605,7 +600,6 @@ func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err 
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -618,7 +612,6 @@ func (n *SdfsConnection) Chown(ctx context.Context, path string, gid int32, uid 
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -631,7 +624,6 @@ func (n *SdfsConnection) Chmod(ctx context.Context, path string, mode int32) (er
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -644,7 +636,6 @@ func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -657,7 +648,6 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -670,7 +660,6 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 		log.Print(err)
 		return data, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return data, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Data, nil
@@ -683,7 +672,6 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -696,7 +684,6 @@ func (n *SdfsConnection) MkNod(ctx context.Context, path string, mode, rdev int3
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -709,7 +696,6 @@ func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh
 		log.Print(err)
 		return fh, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return fh, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.FileHandle, nil
@@ -722,7 +708,6 @@ func (n *SdfsConnection) FileExists(ctx context.Context, path string) (exists bo
 		log.Print(err)
 		return false, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return false, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Exists, nil
@@ -735,7 +720,6 @@ func (n *SdfsConnection) SetUserMetaData(ctx context.Context, path string, fileA
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -748,7 +732,6 @@ func (n *SdfsConnection) GetCloudFile(ctx context.Context, path, dst string, ove
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -765,7 +748,6 @@ func (n *SdfsConnection) GetCloudMetaFile(ctx context.Context, path, dst string,
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -803,7 +785,6 @@ func (n *SdfsConnection) CleanStore(ctx context.Context, compact, waitForComplet
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -820,7 +801,6 @@ func (n *SdfsConnection) DeleteCloudVolume(ctx context.Context, volumeid int64, 
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -837,7 +817,6 @@ func (n *SdfsConnection) DSEInfo(ctx context.Context) (info *spb.DSEInfo, err er
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Info, nil
@@ -850,7 +829,6 @@ func (n *SdfsConnection) SystemInfo(ctx context.Context) (info *spb.SystemInfo, 
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Info, nil
@@ -863,7 +841,6 @@ func (n *SdfsConnection) SetVolumeCapacity(ctx context.Context, size int64) (err
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -876,7 +853,6 @@ func (n *SdfsConnection) GetConnectedVolumes(ctx context.Context) (info []*spb.C
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.VolumeInfo, nil
@@ -889,7 +865,6 @@ func (n *SdfsConnection) GetGCSchedule(ctx context.Context) (schedule string, er
 		log.Print(err)
 		return schedule, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return schedule, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return fi.Schedule, nil
@@ -902,7 +877,6 @@ func (n *SdfsConnection) SetCacheSize(ctx context.Context, size int64, waitForCo
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -919,7 +893,6 @@ func (n *SdfsConnection) SetPassword(ctx context.Context, password string) (err 
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -932,7 +905,6 @@ func (n *SdfsConnection) SetReadSpeed(ctx context.Context, speed int32) (err err
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -945,7 +917,6 @@ func (n *SdfsConnection) SetWriteSpeed(ctx context.Context, speed int32) (err er
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
@@ -958,7 +929,6 @@ func (n *SdfsConnection) SyncFromCloudVolume(ctx context.Context, volumeid int64
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
@@ -975,7 +945,6 @@ func (n *SdfsConnection) SyncCloudVolume(ctx context.Context, waitForCompletion 
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Print(err)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	eventid := fi.EventID
