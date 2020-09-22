@@ -643,7 +643,7 @@ func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
 
 //Write writes data to a given filehandle
 func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
-	fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length})
+	fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
 	if err != nil {
 		log.Print(err)
 		return err
