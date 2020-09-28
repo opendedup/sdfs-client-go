@@ -36,14 +36,15 @@ lint:
 
 # Builds sdfscli locally.
 build:
-	@echo "Building sdfscli binary to './sdfscli'"
-	@go build -o ./sdfscli app/* 
+	@mkdir -p $(PWD)/build
+	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
+	@go build -o ./build/sdfscli app/* 
 
 # Builds sdfscli and installs it to $GOPATH/bin.
 install: build
 	@echo "Installing sdfscli binary to '$(GOPATH)/bin/sdfscli'"
-	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/sdfscli $(GOPATH)/bin/sdfscli
-	@echo "Installation successful. To learn more, try \"sdfscli --help\"."
+	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/build/sdfscli $(GOPATH)/bin/sdfscli
+	@echo "Installation successful. To learn more, try \"sdfscli\"."
 
 clean:
 	@echo "Cleaning up all the generated files"

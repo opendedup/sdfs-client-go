@@ -91,7 +91,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	if !IsFlagPassed("address", flagSet) {
 		address, err := getAddress()
 		if err != nil {
-			fmt.Printf("Unable to connect to %v error: %v\n", address, err)
+			fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
 			os.Exit(1)
 		}
 	}
@@ -103,9 +103,10 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	if *disableTrust {
 		pb.DisableTrust = *disableTrust
 	}
+	//fmt.Printf("Connecting to %s\n", *address)
 	connection, err := pb.NewConnection(*address)
 	if err != nil {
-		fmt.Printf("Unable to connect to %v error: %v\n", address, err)
+		fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
 		os.Exit(1)
 	}
 
@@ -117,24 +118,24 @@ type SdfsURL struct {
 	URL string `json:"url"`
 }
 
-func getAddress() (url string, err error) {
+func getAddress() (url *string, err error) {
 
 	user, err := user.Current()
 	if err != nil {
 		return url, err
 	}
 	filepath := user.HomeDir + "/.sdfs/credentials.json"
-	url, _ = os.LookupEnv("SDFS_URL")
+	purl, _ := os.LookupEnv("SDFS_URL")
 	epath, eok := os.LookupEnv("SDFS_CREDENTIALS_PATH")
-	if len(url) > 0 {
-		return url, nil
+	if len(purl) > 0 {
+		return &purl, nil
 	} else if eok {
 		filepath = epath
 	}
 	_, err = os.Stat(filepath)
 	if os.IsNotExist(err) {
-		url = "sdfss://localhost:6442"
-		return url, nil
+		purl = "sdfss://localhost:6442"
+		return &purl, nil
 	}
 	jsonFile, err := os.Open(filepath)
 	if err != nil {
@@ -152,9 +153,10 @@ func getAddress() (url string, err error) {
 		return url, err
 	}
 	if (len(jurl.URL)) > 0 {
-		url = jurl.URL
+		url = &jurl.URL
 	} else {
-		url = "sdfss://localhost:6442"
+		purl := "sdfss://localhost:6442"
+		url = &purl
 	}
 
 	return url, nil

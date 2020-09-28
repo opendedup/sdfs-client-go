@@ -270,11 +270,14 @@ func NewConnection(path string) (*SdfsConnection, error) {
 				InsecureSkipVerify: true,
 			}
 		}
+		//fmt.Printf("TLS Connecting to %s  disable_trust=%t\n", address, disabletrust)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 
 	} else {
+		//fmt.Printf("Connecting to %s \n", address)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor))
 	}
+	//fmt.Print("BLA")
 
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
