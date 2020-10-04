@@ -10,4 +10,5 @@ COPY ./ /go/sdfs-client-go
 RUN  \
      apk add --no-cache git && \
      cd /go/sdfs-client-go && \
-     make build
+     mkdir -p /go/sdfs-client-go/build && \
+     go build -o /go/sdfs-client-go/build/sdfscli app/*
