@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
@@ -13,6 +14,8 @@ import (
 
 //FileCmd Configure Volume functions for sdfscli
 func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
+	upload := flagSet.String("upload", "srcfile dstfolder\\dstfile", "Uploads a file to the filesystem")
+	download := flagSet.String("download", "srcfile dstfolder\\dstfile", "Downloads a file from the filesystem")
 	linfo := flagSet.String("list", ".", "Returns File Info in list format")
 	finfo := flagSet.String("detail", ".", "Returns Detailed File Info")
 	fattr := flagSet.String("attributes", ".", "Returns File Attributes")
@@ -21,6 +24,26 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	value := flagSet.String("value", "value", "The Attribute Value")
 	fio := flagSet.String("stats", ".", "Returns File Dedupe Rates and other IO Attributes")
 	connection := ParseAndConnect(flagSet)
+	if IsFlagPassed("upload", flagSet) {
+		s := strings.Split(*upload, " ")
+		len, err := connection.Upload(ctx, s[0], s[1])
+		if err != nil {
+			fmt.Printf("Unable to upload: %s to: %s error: %v\n", s[0], s[1], err)
+			os.Exit(1)
+		}
+		fmt.Printf("Uploaded %s, %d bytes written \n", s[1], len)
+		return
+	}
+	if IsFlagPassed("download", flagSet) {
+		s := strings.Split(*download, " ")
+		len, err := connection.Download(ctx, s[0], s[1])
+		if err != nil {
+			fmt.Printf("Unable to download: %s to: %s error: %v\n", s[0], s[1], err)
+			os.Exit(1)
+		}
+		fmt.Printf("Downloaded %s, %d bytes written \n", s[1], len)
+		return
+	}
 	if IsFlagPassed("attribute", flagSet) {
 		if !IsFlagPassed("key", flagSet) && !IsFlagPassed("value", flagSet) {
 			fmt.Println("--key and --value must be set")

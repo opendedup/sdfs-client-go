@@ -25,9 +25,12 @@ import (
 )
 
 const (
-	sdfsBackend   = "sdfs"
-	sdfsSeparator = "/"
+	sdfsBackend    = "sdfs"
+	sdfsSeparator  = "/"
+	sdfsTempFolder = ".sdfsclitemp"
 )
+
+const slashSeparator = "/"
 
 var authtoken string
 var grpcAddress string
@@ -955,4 +958,133 @@ func (n *SdfsConnection) SyncCloudVolume(ctx context.Context, waitForCompletion 
 		return n.WaitForEvent(ctx, eventid)
 	}
 	return n.GetEvent(ctx, eventid)
+}
+
+//Upload uploads a file to the filesystem
+func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written int64, err error) {
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return -1, err
+	}
+	tmpname := path.Join(sdfsTempFolder, u.String())
+	var fh int64
+	n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: sdfsTempFolder})
+	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{Path: tmpname})
+	if err != nil {
+		return -1, err
+	} else if mkf.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
+	}
+	fhr, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: tmpname})
+	if err != nil {
+		return -1, err
+	} else if fhr.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: fhr.GetError(), ErrorCode: fhr.GetErrorCode()}
+	}
+	defer n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: tmpname})
+	fh = fhr.GetFileHandle()
+	b1 := make([]byte, 128*1024)
+	var offset int64 = 0
+	var n1 int = 0
+	r, err := os.Open(src)
+	defer r.Close()
+	if err != nil {
+		return -1, err
+	}
+	n1, err = r.Read(b1)
+	s := make([]byte, n1)
+	copy(s, b1)
+	fwr, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: s, Start: offset, Len: int32(n1)})
+	offset += int64(n1)
+	if err != nil {
+		n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+		return -1, err
+	} else if fwr.GetErrorCode() > 0 {
+		n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+		return -1, &SdfsError{Err: fwr.GetError(), ErrorCode: fwr.GetErrorCode()}
+	}
+	for n1 > 0 {
+		n1, err = r.Read(b1)
+		if n1 > 0 {
+			s = make([]byte, n1)
+			copy(s, b1)
+			fwr, err = n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: s, Start: offset, Len: int32(n1)})
+			offset += int64(n1)
+			if err != nil {
+				n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+				return -1, err
+			} else if fwr.GetErrorCode() > 0 {
+				n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+				return -1, &SdfsError{Err: fwr.GetError(), ErrorCode: fwr.GetErrorCode()}
+			}
+		}
+	}
+
+	n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+	dir := path.Dir(dst)
+	if dir != "" {
+		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: dir})
+		if err != nil {
+			return -1, err
+		} else if mkd.GetErrorCode() > 0 && mkd.GetErrorCode() != spb.ErrorCodes_EEXIST {
+			return -1, &SdfsError{Err: mkd.GetError(), ErrorCode: mkd.GetErrorCode()}
+		}
+	}
+	n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: dst})
+
+	sp, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: tmpname, Dest: dst})
+	if err != nil {
+		return -1, err
+	} else if sp.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: sp.GetError(), ErrorCode: sp.GetErrorCode()}
+	}
+
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: dst})
+	if err != nil {
+		return -1, err
+	} else if fi.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+
+	return fi.GetResponse()[0].GetSize(), nil
+}
+
+//Download downloads a file from SDFS locally
+func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesread int64, err error) {
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: dst})
+	if err != nil {
+		return -1, err
+	} else if fi.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	rd, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: src})
+	if err != nil {
+		return -1, err
+	} else if rd.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: rd.GetError(), ErrorCode: rd.GetErrorCode()}
+	}
+	defer n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: rd.GetFileHandle()})
+	var read int64 = 0
+	var blocksize int32 = 128 * 1024
+	var length = fi.GetResponse()[0].Size
+	writer, err := os.Open(dst)
+	defer writer.Close()
+	for read < length {
+		if blocksize > int32(length-read) {
+			blocksize = int32(length - read)
+		}
+		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: rd.GetFileHandle(), Len: int32(blocksize), Start: read})
+		if err != nil {
+			return -1, err
+		} else if rdr.GetErrorCode() > 0 {
+			return -1, &SdfsError{Err: rdr.GetError(), ErrorCode: rdr.GetErrorCode()}
+		}
+		_, err = writer.Write(rdr.GetData())
+		if err != nil {
+			return -1, err
+		}
+		read += int64(blocksize)
+	}
+
+	return read, nil
 }
