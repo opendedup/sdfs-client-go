@@ -966,6 +966,13 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	if err != nil {
 		return -1, err
 	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return -1, err
+	}
+	if info.IsDir() {
+		return -1, fmt.Errorf(" %s is a dir", src)
+	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
 	var fh int64
 	n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: sdfsTempFolder})
@@ -1051,7 +1058,8 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 
 //Download downloads a file from SDFS locally
 func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesread int64, err error) {
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: dst})
+
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: src})
 	if err != nil {
 		return -1, err
 	} else if fi.GetErrorCode() > 0 {
@@ -1067,14 +1075,19 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 	var read int64 = 0
 	var blocksize int32 = 128 * 1024
 	var length = fi.GetResponse()[0].Size
-	writer, err := os.Open(dst)
+	writer, err := os.Create(dst)
 	defer writer.Close()
 	for read < length {
 		if blocksize > int32(length-read) {
 			blocksize = int32(length - read)
 		}
-		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: rd.GetFileHandle(), Len: int32(blocksize), Start: read})
+		if blocksize == 0 {
+			break
+		}
+		fmt.Printf(" reading at  %d len %d\n", read, blocksize)
+		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: rd.GetFileHandle(), Len: blocksize, Start: read})
 		if err != nil {
+
 			return -1, err
 		} else if rdr.GetErrorCode() > 0 {
 			return -1, &SdfsError{Err: rdr.GetError(), ErrorCode: rdr.GetErrorCode()}

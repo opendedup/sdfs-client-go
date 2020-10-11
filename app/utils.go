@@ -91,7 +91,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	if !IsFlagPassed("address", flagSet) {
 		address, err := getAddress()
 		if err != nil {
-			fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
+			fmt.Printf("Error getting address for %s error: %v\n", *address, err)
 			os.Exit(1)
 		}
 	}
@@ -101,6 +101,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 
 	}
 	if *disableTrust {
+		fmt.Println("TLS Verification Disabled")
 		pb.DisableTrust = *disableTrust
 	}
 	//fmt.Printf("Connecting to %s\n", *address)

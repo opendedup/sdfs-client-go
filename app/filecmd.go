@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
@@ -14,8 +13,14 @@ import (
 
 //FileCmd Configure Volume functions for sdfscli
 func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
-	upload := flagSet.String("upload", "srcfile dstfolder\\dstfile", "Uploads a file to the filesystem")
-	download := flagSet.String("download", "srcfile dstfolder\\dstfile", "Downloads a file from the filesystem")
+	flagSet.Bool("upload", false, "Uploads a file to the filesystem")
+	flagSet.Bool("download", false, "Downloads a file from the filesystem")
+	flagSet.Bool("snapshot", false, "Creates a snapshot of a file")
+	flagSet.Bool("rename", false, "Renames a file")
+	src := flagSet.String("src", ".", "The source file")
+	dst := flagSet.String("dst", ".", "The destination file")
+	delfile := flagSet.String("delete", ".", "Deletes a file")
+	mkdir := flagSet.String("mkdir", ".", "Creates a directory")
 	linfo := flagSet.String("list", ".", "Returns File Info in list format")
 	finfo := flagSet.String("detail", ".", "Returns Detailed File Info")
 	fattr := flagSet.String("attributes", ".", "Returns File Attributes")
@@ -24,24 +29,80 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	value := flagSet.String("value", "value", "The Attribute Value")
 	fio := flagSet.String("stats", ".", "Returns File Dedupe Rates and other IO Attributes")
 	connection := ParseAndConnect(flagSet)
-	if IsFlagPassed("upload", flagSet) {
-		s := strings.Split(*upload, " ")
-		len, err := connection.Upload(ctx, s[0], s[1])
+	if IsFlagPassed("mkdir", flagSet) {
+		err := connection.MkDirAll(ctx, *mkdir)
 		if err != nil {
-			fmt.Printf("Unable to upload: %s to: %s error: %v\n", s[0], s[1], err)
+			fmt.Printf("Unable to mkdir: %s error: %v\n", *mkdir, err)
 			os.Exit(1)
 		}
-		fmt.Printf("Uploaded %s, %d bytes written \n", s[1], len)
+		fmt.Printf("Made directory %s \n", *mkdir)
+		return
+	}
+	if IsFlagPassed("delete", flagSet) {
+		err := connection.DeleteFile(ctx, *delfile)
+		if err != nil {
+			fmt.Printf("Unable to delete: %s error: %v\n", *delfile, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Deleted %s \n", *src)
+		return
+	}
+	if IsFlagPassed("rename", flagSet) {
+		if !IsFlagPassed("src", flagSet) || !IsFlagPassed("dst", flagSet) {
+			fmt.Println("--src and dst must be set for rename")
+			os.Exit(1)
+		}
+		err := connection.Rename(ctx, *src, *dst)
+		if err != nil {
+			fmt.Printf("Unable to rename from: %s to: %s error: %v\n", *src, *dst, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Renamed  %s to %s\n", *src, *dst)
+		return
+	}
+	if IsFlagPassed("snapshot", flagSet) {
+		if !IsFlagPassed("src", flagSet) || !IsFlagPassed("dst", flagSet) {
+			fmt.Println("--src and dst must be set for snapshot")
+			os.Exit(1)
+		}
+		_, err := connection.CopyFile(ctx, *src, *dst, false)
+		if err != nil {
+			fmt.Printf("Unable to create snapshot from: %s to: %s error: %v\n", *src, *dst, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Created snapshot of  %s to %s\n", *src, *dst)
+		return
+	}
+	if IsFlagPassed("upload", flagSet) {
+		if !IsFlagPassed("src", flagSet) {
+			fmt.Println("--src must be set for upload")
+			os.Exit(1)
+		}
+		if !IsFlagPassed("dst", flagSet) {
+			dst = src
+		}
+		len, err := connection.Upload(ctx, *src, *dst)
+		if err != nil {
+			fmt.Printf("Unable to upload: %s to: %s error: %v\n", *src, *dst, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Uploaded %s, %d bytes written \n", *src, len)
 		return
 	}
 	if IsFlagPassed("download", flagSet) {
-		s := strings.Split(*download, " ")
-		len, err := connection.Download(ctx, s[0], s[1])
-		if err != nil {
-			fmt.Printf("Unable to download: %s to: %s error: %v\n", s[0], s[1], err)
+		if !IsFlagPassed("src", flagSet) || !IsFlagPassed("dst", flagSet) {
+			fmt.Println("--src must be set for download")
 			os.Exit(1)
 		}
-		fmt.Printf("Downloaded %s, %d bytes written \n", s[1], len)
+		if !IsFlagPassed("dst", flagSet) {
+			dst = src
+		}
+		len, err := connection.Download(ctx, *src, *dst)
+		if err != nil {
+			fmt.Printf("Unable to download: %s to: %s error: %v\n", *src, *dst, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Downloaded %s, %d bytes written \n", *src, len)
 		return
 	}
 	if IsFlagPassed("attribute", flagSet) {
