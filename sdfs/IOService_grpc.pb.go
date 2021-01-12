@@ -50,6 +50,7 @@ type FileIOServiceClient interface {
 	GetCloudFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
 	GetCloudMetaFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
 	StatFS(ctx context.Context, in *StatFSRequest, opts ...grpc.CallOption) (*StatFSResponse, error)
+	FileNotification(ctx context.Context, in *SyncNotificationSubscription, opts ...grpc.CallOption) (FileIOService_FileNotificationClient, error)
 }
 
 type fileIOServiceClient struct {
@@ -348,6 +349,38 @@ func (c *fileIOServiceClient) StatFS(ctx context.Context, in *StatFSRequest, opt
 	return out, nil
 }
 
+func (c *fileIOServiceClient) FileNotification(ctx context.Context, in *SyncNotificationSubscription, opts ...grpc.CallOption) (FileIOService_FileNotificationClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_FileIOService_serviceDesc.Streams[0], "/org.opendedup.grpc.FileIOService/fileNotification", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &fileIOServiceFileNotificationClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FileIOService_FileNotificationClient interface {
+	Recv() (*FileMessageResponse, error)
+	grpc.ClientStream
+}
+
+type fileIOServiceFileNotificationClient struct {
+	grpc.ClientStream
+}
+
+func (x *fileIOServiceFileNotificationClient) Recv() (*FileMessageResponse, error) {
+	m := new(FileMessageResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // FileIOServiceServer is the server API for FileIOService service.
 // All implementations must embed UnimplementedFileIOServiceServer
 // for forward compatibility
@@ -385,6 +418,7 @@ type FileIOServiceServer interface {
 	GetCloudFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
 	GetCloudMetaFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
 	StatFS(context.Context, *StatFSRequest) (*StatFSResponse, error)
+	FileNotification(*SyncNotificationSubscription, FileIOService_FileNotificationServer) error
 	mustEmbedUnimplementedFileIOServiceServer()
 }
 
@@ -487,6 +521,9 @@ func (*UnimplementedFileIOServiceServer) GetCloudMetaFile(context.Context, *GetC
 }
 func (*UnimplementedFileIOServiceServer) StatFS(context.Context, *StatFSRequest) (*StatFSResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StatFS not implemented")
+}
+func (*UnimplementedFileIOServiceServer) FileNotification(*SyncNotificationSubscription, FileIOService_FileNotificationServer) error {
+	return status.Errorf(codes.Unimplemented, "method FileNotification not implemented")
 }
 func (*UnimplementedFileIOServiceServer) mustEmbedUnimplementedFileIOServiceServer() {}
 
@@ -1070,6 +1107,27 @@ func _FileIOService_StatFS_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileIOService_FileNotification_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SyncNotificationSubscription)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FileIOServiceServer).FileNotification(m, &fileIOServiceFileNotificationServer{stream})
+}
+
+type FileIOService_FileNotificationServer interface {
+	Send(*FileMessageResponse) error
+	grpc.ServerStream
+}
+
+type fileIOServiceFileNotificationServer struct {
+	grpc.ServerStream
+}
+
+func (x *fileIOServiceFileNotificationServer) Send(m *FileMessageResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 var _FileIOService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.FileIOService",
 	HandlerType: (*FileIOServiceServer)(nil),
@@ -1203,6 +1261,12 @@ var _FileIOService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _FileIOService_StatFS_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "fileNotification",
+			Handler:       _FileIOService_FileNotification_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "IOService.proto",
 }

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+
+	spb "github.com/opendedup/sdfs-client-go/sdfs"
 )
 
 //FileCmd Configure Volume functions for sdfscli
@@ -17,6 +19,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	flagSet.Bool("download", false, "Downloads a file from the filesystem")
 	flagSet.Bool("snapshot", false, "Creates a snapshot of a file")
 	flagSet.Bool("rename", false, "Renames a file")
+	flagSet.Bool("change-listener", false, "Listens and notifies on changes")
 	src := flagSet.String("src", ".", "The source file")
 	dst := flagSet.String("dst", ".", "The destination file")
 	delfile := flagSet.String("delete", ".", "Deletes a file")
@@ -221,6 +224,72 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			table.Render()
 		}
 
+	}
+
+	if IsFlagPassed("change-listener", flagSet) {
+		c := make(chan *spb.FileMessageResponse)
+		go connection.FileNotification(ctx, c)
+		for {
+			fInfo := <-c
+			if fInfo == nil {
+				fmt.Printf("done")
+				return
+			}
+			for _, v := range fInfo.Response {
+				table := tablewriter.NewWriter(os.Stdout)
+				table.SetHeader([]string{"File Name", v.FileName})
+				atime := time.Unix(0, v.Atime*int64(time.Millisecond))
+				ctime := time.Unix(0, v.Ctime*int64(time.Millisecond))
+				mtime := time.Unix(0, v.Mtime*int64(time.Millisecond))
+				table.Append([]string{"File Name", v.FileName})
+				if v.Type == 0 {
+
+					table.Append([]string{"Size", strconv.FormatInt(v.Size, 10)})
+					table.Append([]string{"File GUID", v.FileGuild})
+					table.Append([]string{"Map GUID", v.MapGuid})
+					table.Append([]string{"File Path", v.FilePath})
+					table.Append([]string{"Access Time", atime.String()})
+					table.Append([]string{"Create Time", ctime.String()})
+					table.Append([]string{"Modifies Time", mtime.String()})
+					table.Append([]string{"Execute", fmt.Sprintf("%t", v.Execute)})
+					table.Append([]string{"Read", fmt.Sprintf("%t", v.Read)})
+					table.Append([]string{"Read", fmt.Sprintf("%t", v.Write)})
+					table.Append([]string{"Hidden", fmt.Sprintf("%t", v.Hidden)})
+					table.Append([]string{"Hash Code", fmt.Sprintf("%d", v.Hashcode)})
+					table.Append([]string{"ID", v.Id})
+					table.Append([]string{"Importing", fmt.Sprintf("%t", v.Importing)})
+					table.Append([]string{"Unix Permissions", fmt.Sprintf("%d", v.Permissions)})
+					table.Append([]string{"Group ID", fmt.Sprintf("%d", v.GroupId)})
+					table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
+					table.Append([]string{"File Open", fmt.Sprintf("%t", v.Open)})
+					table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
+					table.Append([]string{"Symlink Path", fmt.Sprintf("%s", v.SymlinkPath)})
+					table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
+
+				} else {
+					table.Append([]string{"Size", strconv.FormatInt(v.Size, 10)})
+					table.Append([]string{"File Path", v.FilePath})
+					table.Append([]string{"Access Time", atime.String()})
+					table.Append([]string{"Create Time", ctime.String()})
+					table.Append([]string{"Modifies Time", mtime.String()})
+					table.Append([]string{"Execute", fmt.Sprintf("%t", v.Execute)})
+					table.Append([]string{"Read", fmt.Sprintf("%t", v.Read)})
+					table.Append([]string{"Read", fmt.Sprintf("%t", v.Write)})
+					table.Append([]string{"Hidden", fmt.Sprintf("%t", v.Hidden)})
+					table.Append([]string{"Hash Code", fmt.Sprintf("%d", v.Hashcode)})
+					table.Append([]string{"Unix Permissions", fmt.Sprintf("%d", v.Permissions)})
+					table.Append([]string{"Group ID", fmt.Sprintf("%d", v.GroupId)})
+					table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
+					table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
+					table.Append([]string{"Symlink Path", fmt.Sprintf("%s", v.SymlinkPath)})
+					table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
+				}
+				table.Append([]string{"Event Type", fmt.Sprintf("%s", fInfo.Action)})
+				table.SetAlignment(tablewriter.ALIGN_LEFT)
+
+				table.Render()
+			}
+		}
 	}
 
 	if IsFlagPassed("file-attributes", flagSet) {

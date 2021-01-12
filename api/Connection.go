@@ -479,6 +479,32 @@ func (n *SdfsConnection) WaitForEvent(ctx context.Context, eventid string) (*spb
 	}
 }
 
+//FileNotification notifies over a channel for all events when a file is downloaded for Sync
+func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *spb.FileMessageResponse) error {
+	stream, err := n.fc.FileNotification(ctx, &spb.SyncNotificationSubscription{Uid: "bla"})
+	if err != nil {
+
+		log.Print(err)
+		return err
+	}
+	for {
+		fi, err := stream.Recv()
+		if err != nil {
+
+			log.Print(err)
+			fileInfo <- nil
+			return err
+		} else if fi.GetErrorCode() > 0 {
+			return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		} else {
+			if len(fi.GetResponse()) > 0 {
+				fileInfo <- fi
+			}
+
+		}
+	}
+}
+
 //GetXAttrSize gets the list size for attributes. This is useful for a fuse implementation
 func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path string) (int32, error) {
 	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: path})
