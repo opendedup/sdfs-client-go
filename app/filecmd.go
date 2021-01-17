@@ -47,7 +47,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			fmt.Printf("Unable to delete: %s error: %v\n", *delfile, err)
 			os.Exit(1)
 		}
-		fmt.Printf("Deleted %s \n", *src)
+		fmt.Printf("Deleted %s \n", *delfile)
 		return
 	}
 	if IsFlagPassed("rename", flagSet) {
