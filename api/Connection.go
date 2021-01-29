@@ -3,10 +3,8 @@ package api
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -15,6 +13,7 @@ import (
 	"time"
 
 	uuid "github.com/google/uuid"
+	"github.com/kelseyhightower/envconfig"
 	xnet "github.com/minio/minio/pkg/net"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"google.golang.org/grpc"
@@ -22,6 +21,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -48,9 +48,9 @@ type SdfsConnection struct {
 
 // A Credentials Struct
 type Credentials struct {
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	Disabletrust bool   `json:"disable_ssl_verify"`
+	ServerURL    string `yaml:"url" required:"true" envconfig:"SDFS_URL" default:"sdfss://localhost:6442"`
+	Password     string `yaml:"password" default:"" envconfig:"SDFS_PASSWORD" default:""`
+	DisableTrust bool   `yaml:"disable_trust" envconfig:"SDFS_DISABLE_TRUST"`
 	set          bool
 }
 
@@ -137,7 +137,7 @@ func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
 }
 
 func authenicateUser(ctx context.Context) (token string, err error) {
-	username, password, disabletrust, err := getCredentials()
+	creds, err := getCredentials("")
 
 	if err != nil {
 		return token, err
@@ -146,7 +146,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 
 	if grpcSSL == true {
 		config := &tls.Config{}
-		if disabletrust {
+		if creds.DisableTrust {
 			config = &tls.Config{
 				InsecureSkipVerify: true,
 			}
@@ -162,7 +162,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 		return token, fmt.Errorf("unable to initialize sdfsClient")
 	}
 	vc := spb.NewVolumeServiceClient(conn)
-	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: username, Password: password})
+	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: "admin", Password: creds.Password})
 	if err != nil {
 		return token, err
 	} else if auth.GetErrorCode() > 0 && auth.GetErrorCode() != spb.ErrorCodes_EEXIST {
@@ -179,58 +179,46 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 	return token, err
 }
 
-func getCredentials() (username string, password string, disabletrust bool, err error) {
-	username = UserName
-	password = Password
-	disabletrust = DisableTrust
-
-	user, err := user.Current()
-	filepath := user.HomeDir + "/.sdfs/credentials.json"
-	if len(username) == 0 {
-		username, _ = os.LookupEnv("SDFS_USER")
-	}
-	if len(password) == 0 {
-		password, _ = os.LookupEnv("SDFS_PASSWORD")
-	}
-	epath, eok := os.LookupEnv("SDFS_CREDENTIALS_PATH")
-	if !disabletrust {
-		_, dok := os.LookupEnv("SDFS_DISABLE_TRUST")
-
-		if dok {
-			disabletrust = true
+func getCredentials(configPath string) (creds *Credentials, err error) {
+	if configPath == "" {
+		user, err := user.Current()
+		if err != nil {
+			return nil, err
 		}
+		configPath = user.HomeDir + "/.sdfs/credentials.json"
 	}
-	if len(username) > 0 && len(password) > 0 {
-		return username, password, disabletrust, nil
-	} else if eok {
-		filepath = epath
+	// Create config structure
+	creds = &Credentials{}
+
+	// Open config file
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, err
 	}
-	_, err = os.Stat(filepath)
+	defer file.Close()
+	// Init environmental variables
+	err = envconfig.Process("", creds)
+	if err != nil {
+		return nil, err
+	}
+	_, err = os.Stat(configPath)
 	if os.IsNotExist(err) {
-		return username, password, disabletrust, nil
+		return creds, nil
 	}
-	jsonFile, err := os.Open(filepath)
-	if err != nil {
-		return username, password, disabletrust, err
-	}
-	// we initialize our Users array
+	log.Printf("Reading Credentials from %s \n", configPath)
+	// Init new YAML decode
+	d := yaml.NewDecoder(file)
 
-	var creds Credentials
+	// Start YAML decoding from file
+	if err := d.Decode(&creds); err != nil {
+		return nil, err
+	}
+	creds.ServerURL = strings.ToLower(creds.ServerURL)
+	if !strings.HasPrefix(creds.ServerURL, "sdfs") {
+		return nil, fmt.Errorf("unsupported server type %s, only supports sdfs:// or sdfss://", creds.ServerURL)
+	}
+	return creds, nil
 
-	byteValue, err := ioutil.ReadAll(jsonFile)
-
-	if err != nil {
-		return username, password, disabletrust, err
-	}
-	err = json.Unmarshal(byteValue, &creds)
-	if err != nil {
-		fmt.Printf("unable to parse %s", filepath)
-		return username, password, disabletrust, err
-	}
-	if !disabletrust && creds.Disabletrust {
-		disabletrust = creds.Disabletrust
-	}
-	return creds.Username, creds.Password, disabletrust, nil
 }
 
 //NewConnection Created a new connectio given a path
@@ -260,7 +248,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to lookup local user. %s", err)
 	}
-	_, _, disabletrust, err := getCredentials()
+	creds, err := getCredentials("")
 	if err != nil {
 		return nil, fmt.Errorf("Not able to read credentials. %s", err)
 	}
@@ -268,7 +256,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	defer cancel()
 	if useSSL == true {
 		config := &tls.Config{}
-		if disabletrust {
+		if creds.DisableTrust {
 			config = &tls.Config{
 				InsecureSkipVerify: true,
 			}
