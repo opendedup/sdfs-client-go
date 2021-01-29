@@ -236,8 +236,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	if u.Scheme == "sdfss" {
 		useSSL = true
 		grpcSSL = true
-	}
-	if commonPath == "" {
+	} else if commonPath == "" {
 		commonPath = u.Path
 	}
 	address = u.Host
@@ -266,7 +265,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 
 	} else {
 		//fmt.Printf("Connecting to %s \n", address)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor))
 	}
 	//fmt.Print("BLA")
 
