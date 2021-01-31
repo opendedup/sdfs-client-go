@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 )
 
 //FileCmd Configure Volume functions for sdfscli
 func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	flagSet.Bool("upload", false, "Uploads a file to the filesystem")
+	flagSet.Bool("preserve", false, "preserve permissions and ownership for file")
 	flagSet.Bool("download", false, "Downloads a file from the filesystem")
 	flagSet.Bool("snapshot", false, "Creates a snapshot of a file")
 	flagSet.Bool("rename", false, "Renames a file")
@@ -25,7 +25,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	delfile := flagSet.String("delete", ".", "Deletes a file")
 	mkdir := flagSet.String("mkdir", ".", "Creates a directory")
 	linfo := flagSet.String("list", ".", "Returns File Info in list format")
-	finfo := flagSet.String("detail", ".", "Returns Detailed File Info")
+	finfo := flagSet.String("file-detail", ".", "Returns Detailed File Info")
 	fattr := flagSet.String("attributes", ".", "Returns File Attributes")
 	sattr := flagSet.String("attribute", ".", "Sets A File Attribute")
 	key := flagSet.String("key", "key", "The Attribute Key")
@@ -84,12 +84,28 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		if !IsFlagPassed("dst", flagSet) {
 			dst = src
 		}
-		len, err := connection.Upload(ctx, *src, *dst)
+		_len, err := connection.Upload(ctx, *src, *dst)
 		if err != nil {
 			fmt.Printf("Unable to upload: %s to: %s error: %v\n", *src, *dst, err)
 			os.Exit(1)
 		}
-		fmt.Printf("Uploaded %s, %d bytes written \n", *src, len)
+		if IsFlagPassed("preserve", flagSet) {
+
+			UID, GID, CHMOD, err := GetPermissions(*src)
+			if err != nil {
+				fmt.Printf("Unable to get permissions: %s error: %v\n", *src, err)
+			}
+			err = connection.Chmod(ctx, *dst, int32(CHMOD))
+			if err != nil {
+				fmt.Printf("Unable to set permissions: %s to: %s error: %v\n", *src, *dst, err)
+			}
+			err = connection.Chown(ctx, *dst, GID, UID)
+			if err != nil {
+				fmt.Printf("Unable to set owner: %s to: %s error: %v\n", *src, *dst, err)
+			}
+
+		}
+		fmt.Printf("Uploaded %s, %d bytes written \n", *src, _len)
 		return
 	}
 	if IsFlagPassed("download", flagSet) {

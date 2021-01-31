@@ -185,7 +185,7 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 		if err != nil {
 			return nil, err
 		}
-		configPath = user.HomeDir + "/.sdfs/credentials.json"
+		configPath = user.HomeDir + "/.sdfs/credentials.yaml"
 	}
 	// Create config structure
 	creds = &Credentials{}
@@ -249,7 +249,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 	creds, err := getCredentials("")
 	if err != nil {
-		return nil, fmt.Errorf("Not able to read credentials. %s", err)
+		log.Printf("Not able to read credentials. %s", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	defer cancel()
@@ -1097,7 +1097,7 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 		if blocksize == 0 {
 			break
 		}
-		fmt.Printf(" reading at  %d len %d\n", read, blocksize)
+		//log(" reading at  %d len %d\n", read, blocksize)
 		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: rd.GetFileHandle(), Len: blocksize, Start: read})
 		if err != nil {
 
