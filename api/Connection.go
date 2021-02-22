@@ -158,7 +158,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 	}
 
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Printf("did not connect: %v", err)
 		return token, fmt.Errorf("unable to initialize sdfsClient")
 	}
 	vc := spb.NewVolumeServiceClient(conn)
@@ -174,7 +174,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 	}
 	err = conn.Close()
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Printf("did not connect: %v", err)
 	}
 	return token, err
 }
@@ -190,12 +190,6 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	// Create config structure
 	creds = &Credentials{}
 
-	// Open config file
-	file, err := os.Open(configPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
 	// Init environmental variables
 	err = envconfig.Process("", creds)
 	if err != nil {
@@ -203,9 +197,18 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	}
 	_, err = os.Stat(configPath)
 	if os.IsNotExist(err) {
+		if DisableTrust {
+			creds.DisableTrust = true
+		}
 		return creds, nil
 	}
 	log.Printf("Reading Credentials from %s \n", configPath)
+	// Open config file
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
 	// Init new YAML decode
 	d := yaml.NewDecoder(file)
 
@@ -214,6 +217,10 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 		return nil, err
 	}
 	creds.ServerURL = strings.ToLower(creds.ServerURL)
+	if DisableTrust {
+		creds.DisableTrust = true
+	}
+
 	if !strings.HasPrefix(creds.ServerURL, "sdfs") {
 		return nil, fmt.Errorf("unsupported server type %s, only supports sdfs:// or sdfss://", creds.ServerURL)
 	}
@@ -260,7 +267,8 @@ func NewConnection(path string) (*SdfsConnection, error) {
 				InsecureSkipVerify: true,
 			}
 		}
-		//fmt.Printf("TLS Connecting to %s  disable_trust=%t\n", address, disabletrust)
+
+		//fmt.Printf("TLS Connecting to %s  disable_trust=%t\n", address, creds.DisableTrust)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 
 	} else {
@@ -270,7 +278,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	//fmt.Print("BLA")
 
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Printf("did not connect to %s : %v", path, err)
 		return nil, fmt.Errorf("unable to initialize sdfsClient")
 	}
 
