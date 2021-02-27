@@ -89,7 +89,10 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	pwd := flagSet.String("pwd", "Password", "The Password for the Volume")
 	address := flagSet.String("address", "sdfss://localhost:6442", "The Password for the Volume")
 	disableTrust := flagSet.Bool("trust-all", false, "Trust Self Signed TLS Certs")
+	trustCert := flagSet.Bool("trust-cert", false, "Trust the certificate for url specified. This will download and store the certificate in $HOME/.sdfs/keys")
+
 	flagSet.Parse(os.Args[2:])
+
 	if !IsFlagPassed("address", flagSet) {
 		address, err := getAddress()
 		if err != nil {
@@ -97,6 +100,14 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 			os.Exit(1)
 		}
 	}
+	if *trustCert {
+		err := pb.AddTrustedCert(*address)
+		if err != nil {
+			fmt.Printf("Error trusting certificate for %s error: %v\n", *address, err)
+			os.Exit(1)
+		}
+	}
+
 	if IsFlagPassed("pwd", flagSet) {
 		pb.UserName = "admin"
 		pb.Password = *pwd

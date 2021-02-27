@@ -30,6 +30,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	ccv := flagSet.Bool("connected-volumes", false, "Returns A list of volumes that are using the same storage")
 	levents := flagSet.Bool("events-list", false, "List Events")
 	connection := ParseAndConnect(flagSet)
+
 	if *cleanstore == true {
 
 		evt, err := connection.CleanStore(ctx, true, true)

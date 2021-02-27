@@ -1,10 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -200,6 +204,9 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 		if DisableTrust {
 			creds.DisableTrust = true
 		}
+		if len(Password) > 0 {
+			creds.Password = Password
+		}
 		return creds, nil
 	}
 	log.Printf("Reading Credentials from %s \n", configPath)
@@ -224,8 +231,115 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	if !strings.HasPrefix(creds.ServerURL, "sdfs") {
 		return nil, fmt.Errorf("unsupported server type %s, only supports sdfs:// or sdfss://", creds.ServerURL)
 	}
+	if len(Password) > 0 {
+		creds.Password = Password
+	}
+
 	return creds, nil
 
+}
+
+func parseURL(url string) (string, string, bool, error) {
+	u, err := xnet.ParseURL(url)
+	if err != nil {
+		return "", "", false, err
+	}
+	if !strings.HasPrefix(u.Scheme, "sdfs") {
+		return "", "", false, fmt.Errorf("unsupported scheme %s, only supports sdfs:// or sdfss://", u)
+	}
+	useSSL := false
+	commonPath := ""
+	if u.Scheme == "sdfss" {
+		useSSL = true
+	} else if commonPath == "" {
+		commonPath = u.Path
+	}
+	address := u.Host
+	return address, commonPath, useSSL, nil
+}
+
+//AddTrustedCert adds a trusted Cert
+func AddTrustedCert(url string) error {
+	address, _, _, err := parseURL(url)
+	if err != nil {
+		return err
+	}
+	config := tls.Config{InsecureSkipVerify: true}
+	conn, err := tls.Dial("tcp", address, &config)
+
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	var b bytes.Buffer
+	for _, cert := range conn.ConnectionState().PeerCertificates {
+		err := pem.Encode(&b, &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert.Raw,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	configPath := user.HomeDir + "/.sdfs/keys/"
+	os.MkdirAll(configPath, 0700)
+	fn := fmt.Sprintf("%s%s.pem", configPath, address)
+	err = ioutil.WriteFile(fn, b.Bytes(), 0600)
+	if err != nil {
+		return err
+	}
+	nb, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return err
+	}
+	block, _ := pem.Decode(nb)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return err
+	}
+	//fmt.Printf("cert=%v", cert)
+
+	certPool := x509.NewCertPool()
+	certPool.AddCert(cert)
+	nconfig := &tls.Config{
+		InsecureSkipVerify: false,
+		ServerName:         cert.Subject.CommonName,
+		RootCAs:            certPool,
+	}
+	nconn, err := tls.Dial("tcp", address, nconfig)
+	if err != nil {
+		return err
+	}
+	nconn.Close()
+	return nil
+}
+
+func getCert(address string) (*x509.Certificate, error) {
+	user, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	configPath := user.HomeDir + "/.sdfs/keys/"
+
+	fn := fmt.Sprintf("%s%s.pem", configPath, address)
+	_, err = os.Stat(fn)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	nb, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(nb)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
 }
 
 //NewConnection Created a new connectio given a path
@@ -254,10 +368,13 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to lookup local user. %s", err)
 	}
+
 	creds, err := getCredentials("")
+	creds.ServerURL = path
 	if err != nil {
 		log.Printf("Not able to read credentials. %s", err)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	defer cancel()
 	if useSSL == true {
@@ -265,6 +382,18 @@ func NewConnection(path string) (*SdfsConnection, error) {
 		if creds.DisableTrust {
 			config = &tls.Config{
 				InsecureSkipVerify: true,
+			}
+		}
+		cert, err := getCert(address)
+		if err != nil {
+			return nil, err
+		} else if cert != nil {
+			certPool := x509.NewCertPool()
+			certPool.AddCert(cert)
+			config = &tls.Config{
+				InsecureSkipVerify: false,
+				ServerName:         cert.Subject.CommonName,
+				RootCAs:            certPool,
 			}
 		}
 
@@ -278,12 +407,18 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	//fmt.Print("BLA")
 
 	if err != nil {
-		log.Printf("did not connect to %s : %v", path, err)
+		log.Printf("did not connect to %s : %v\n", path, err)
+		return nil, fmt.Errorf("unable to initialize sdfsClient")
+	}
+	if conn == nil {
 		return nil, fmt.Errorf("unable to initialize sdfsClient")
 	}
 
 	vc := spb.NewVolumeServiceClient(conn)
-	vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
+	_, err = vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
+	if err != nil {
+		return nil, err
+	}
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 
@@ -467,6 +602,8 @@ func (n *SdfsConnection) WaitForEvent(ctx context.Context, eventid string) (*spb
 			return nil, err
 		} else if fi.GetErrorCode() > 0 {
 			return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		} else if fi.Event.Level == "error" {
+			return nil, &SdfsError{Err: fi.Event.ShortMsg, ErrorCode: spb.ErrorCodes_EBADFD}
 		}
 		if fi.Event.EndTime > 0 {
 			return fi.Event, nil
@@ -476,7 +613,7 @@ func (n *SdfsConnection) WaitForEvent(ctx context.Context, eventid string) (*spb
 
 //FileNotification notifies over a channel for all events when a file is downloaded for Sync
 func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *spb.FileMessageResponse) error {
-	stream, err := n.fc.FileNotification(ctx, &spb.SyncNotificationSubscription{Uid: "bla"})
+	stream, err := n.fc.FileNotification(ctx, &spb.SyncNotificationSubscription{Uid: uuid.New().String()})
 	if err != nil {
 
 		log.Print(err)
@@ -501,8 +638,8 @@ func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *sp
 }
 
 //GetXAttrSize gets the list size for attributes. This is useful for a fuse implementation
-func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path string) (int32, error) {
-	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: path})
+func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path, key string) (int32, error) {
+	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: path, Attr: key})
 	if err != nil {
 		log.Print(err)
 		return 0, err
@@ -596,7 +733,7 @@ func (n *SdfsConnection) SymLink(ctx context.Context, src, dst string) (err erro
 	return nil
 }
 
-//ReadLink creates a symlink for a given source and destination
+//ReadLink reads a symlink for a given source
 func (n *SdfsConnection) ReadLink(ctx context.Context, path string) (linkpath string, err error) {
 	fi, err := n.fc.ReadLink(ctx, &spb.LinkRequest{Path: path})
 	if err != nil {
@@ -821,6 +958,11 @@ func (n *SdfsConnection) CleanStore(ctx context.Context, compact, waitForComplet
 	return n.GetEvent(ctx, eventid)
 }
 
+//Clear AuthToken will remove the current auth token to authenticate to the client
+func ClearAuthToken() {
+	authtoken = ""
+}
+
 //DeleteCloudVolume deletes a volume that is no longer in use
 func (n *SdfsConnection) DeleteCloudVolume(ctx context.Context, volumeid int64, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
 	fi, err := n.vc.DeleteCloudVolume(ctx, &spb.DeleteCloudVolumeRequest{Volumeid: volumeid})
@@ -934,19 +1076,23 @@ func (n *SdfsConnection) SetReadSpeed(ctx context.Context, speed int32) (err err
 	} else if fi.GetErrorCode() > 0 {
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	return nil
+	eventid := fi.EventID
+	_, err = n.WaitForEvent(ctx, eventid)
+	return err
 }
 
 //SetWriteSpeed sets the write speed in Kb/s
 func (n *SdfsConnection) SetWriteSpeed(ctx context.Context, speed int32) (err error) {
-	fi, err := n.vc.SetReadSpeed(ctx, &spb.SpeedRequest{RequestedSpeed: speed})
+	fi, err := n.vc.SetWriteSpeed(ctx, &spb.SpeedRequest{RequestedSpeed: speed})
 	if err != nil {
 		log.Print(err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	return nil
+	eventid := fi.EventID
+	_, err = n.WaitForEvent(ctx, eventid)
+	return err
 }
 
 //SyncFromCloudVolume syncs the current volume from a give volume id

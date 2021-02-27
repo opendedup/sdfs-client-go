@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"os/user"
+
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -14,19 +17,20 @@ import (
 	network "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	natting "github.com/docker/go-connections/nat"
+	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 )
 
-const (
-	address     = "sdfss://localhost:6442"
-	letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-)
+var address = "sdfss://localhost:6442"
 
 const (
+	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	letterIdxBits = 6                    // 6 bits to represent a letter index
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+	tb            = int64(1099511627776)
+	gb            = int64(1073741824)
 )
 
 func randBytesMaskImpr(n int) []byte {
@@ -79,6 +83,9 @@ func TestMkNod(t *testing.T) {
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
 	fn, _ := makeFile(t, "", 128)
+	exists, err := connection.FileExists(ctx, fn)
+	assert.Nil(t, err)
+	assert.True(t, exists)
 	deleteFile(t, fn)
 }
 
@@ -151,6 +158,638 @@ func TestListDir(t *testing.T) {
 }
 
 func TestCleanStore(t *testing.T) {
+	cleanStore(t, 30)
+
+}
+
+func TestStatFS(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	_, err := connection.StatFS(ctx)
+	assert.Nil(t, err)
+}
+
+func TestRename(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	nfn := string(randBytesMaskImpr(16))
+
+	err := connection.Rename(ctx, fn, nfn)
+	assert.Nil(t, err)
+	_, err = connection.Stat(ctx, fn)
+	assert.NotNil(t, err)
+	_, err = connection.Stat(ctx, nfn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, nfn)
+	assert.Nil(t, err)
+}
+
+func TestCopyFile(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, hash := makeFile(t, "", 1024)
+	nfn := string(randBytesMaskImpr(16))
+	_, err := connection.CopyFile(ctx, fn, nfn, false)
+	assert.Nil(t, err)
+	nhash := readFile(t, nfn, false)
+	assert.Equal(t, hash, nhash)
+	err = connection.DeleteFile(ctx, nfn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestEvents(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, hash := makeFile(t, "", 1024)
+	nfn := string(randBytesMaskImpr(16))
+	evt, err := connection.CopyFile(ctx, fn, nfn, true)
+	assert.Nil(t, err)
+	_, err = connection.WaitForEvent(ctx, evt.Uuid)
+	nhash := readFile(t, nfn, false)
+	assert.Equal(t, hash, nhash)
+	err = connection.DeleteFile(ctx, nfn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	_, err = connection.GetEvent(ctx, evt.Uuid)
+	assert.Nil(t, err)
+	_, err = connection.ListEvents(ctx)
+	assert.Nil(t, err)
+}
+
+func TestXAttrs(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	_, err := connection.GetXAttrSize(ctx, fn, "key")
+	assert.NotNil(t, err)
+	err = connection.SetXAttr(ctx, "key", "value", fn)
+	assert.Nil(t, err)
+	val, err := connection.GetXAttr(ctx, "key", fn)
+	assert.Equal(t, val, "value")
+	assert.Nil(t, err)
+	_, err = connection.GetXAttrSize(ctx, fn, "key")
+	assert.Nil(t, err)
+	err = connection.RemoveXAttr(ctx, "key", fn)
+	assert.Nil(t, err)
+	_, err = connection.GetXAttrSize(ctx, fn, "key")
+	assert.NotNil(t, err)
+	fa := []*spb.FileAttributes{{Key: "key1", Value: "value1"}, {Key: "key2", Value: "value2"}}
+	err = connection.SetUserMetaData(ctx, fn, fa)
+	_, fal, err := connection.ListDir(ctx, fn, "", false, int32(1000))
+	assert.Nil(t, err)
+	for _, attrs := range fal {
+		if attrs.FileAttributes[0].Key == "key1" {
+			assert.Equal(t, attrs.FileAttributes[0].Value, "value1")
+		} else {
+			assert.Equal(t, attrs.FileAttributes[0].Key, "key2")
+			assert.Equal(t, attrs.FileAttributes[0].Value, "value2")
+		}
+	}
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestSetUtime(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	err := connection.Utime(ctx, fn, int64(0), int64(0))
+	assert.Nil(t, err)
+	stat, err := connection.GetAttr(ctx, fn)
+	assert.Nil(t, err)
+	assert.Equal(t, stat.Atime, int64(0))
+	assert.Equal(t, stat.Mtim, int64(0))
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestTuncate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	err := connection.Truncate(ctx, fn, int64(0))
+	assert.Nil(t, err)
+	stat, err := connection.GetAttr(ctx, fn)
+	assert.Nil(t, err)
+	assert.Equal(t, stat.Size, int64(0))
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestSymLink(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	sfn := string(randBytesMaskImpr(16))
+	err := connection.SymLink(ctx, fn, sfn)
+	assert.Nil(t, err)
+	_sfn, err := connection.ReadLink(ctx, sfn)
+	assert.Equal(t, fn, _sfn)
+	_, err = connection.GetAttr(ctx, sfn)
+	assert.Nil(t, err)
+	_, fls, err := connection.ListDir(ctx, "/", "", false, int32(100))
+	assert.Equal(t, len(fls), 2)
+	assert.Nil(t, err)
+	err = connection.Unlink(ctx, sfn)
+	assert.Nil(t, err)
+	_, err = connection.GetAttr(ctx, sfn)
+	assert.NotNil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestSync(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	fh, err := connection.Open(ctx, fn, int32(-1))
+	assert.Nil(t, err)
+	b := randBytesMaskImpr(16)
+	err = connection.Write(ctx, fh, b, 0, int32(len(b)))
+	assert.Nil(t, err)
+	err = connection.Flush(ctx, fn, fh)
+	assert.Nil(t, err)
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestCopyExtent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn, _ := makeFile(t, "", 1024)
+	sfn, _ := makeFile(t, "", 1024)
+	fh, err := connection.Open(ctx, fn, int32(-1))
+	assert.Nil(t, err)
+	sfh, err := connection.Open(ctx, sfn, int32(-1))
+	assert.Nil(t, err)
+	b := randBytesMaskImpr(16)
+	err = connection.Write(ctx, fh, b, 0, int32(len(b)))
+	assert.Nil(t, err)
+	err = connection.Flush(ctx, fn, fh)
+	assert.Nil(t, err)
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+	fh, err = connection.Open(ctx, fn, int32(-1))
+	assert.Nil(t, err)
+	_, err = connection.CopyExtent(ctx, fn, sfn, 0, 0, int64(len(b)))
+	assert.Nil(t, err)
+	err = connection.Flush(ctx, sfn, sfh)
+	assert.Nil(t, err)
+	err = connection.Release(ctx, sfh)
+	assert.Nil(t, err)
+	sfh, err = connection.Open(ctx, sfn, int32(-1))
+	assert.Nil(t, err)
+	nb, err := connection.Read(ctx, sfh, 0, int32(len(b)))
+	assert.Nil(t, err)
+	assert.Equal(t, nb, b)
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+	err = connection.Release(ctx, sfh)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, sfn)
+	assert.Nil(t, err)
+}
+
+func TestInfo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	_, err := connection.GetVolumeInfo(ctx)
+	assert.Nil(t, err)
+	_, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	_, err = connection.SystemInfo(ctx)
+	assert.Nil(t, err)
+}
+
+func TestGCSchedule(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	gc, err := connection.GetGCSchedule(ctx)
+	assert.Nil(t, err)
+	t.Logf("GC Sched = %s", gc)
+}
+
+func TestSetPassword(t *testing.T) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli.NegotiateAPIVersion(ctx)
+	imagename := "gcr.io/hybrics/hybrics:3.11"
+	containername := string(randBytesMaskImpr(16))
+	portopening := "6442"
+	nport := "6443"
+	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000"),
+		fmt.Sprintf("PASSWORD=%s", "password123"), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
+	cmd := []string{}
+	_, err = runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
+	defer stopAndRemoveContainer(cli, containername)
+	assert.Nil(t, err)
+	addr := "sdfss://localhost:6443"
+	connection, err := connectN(t, addr, 4)
+	assert.NotNil(t, err)
+	Password = "password123"
+	UserName = "admin"
+	connection, err = connectN(t, addr, 0)
+	assert.Nil(t, err)
+	if err == nil {
+		_, err = connection.GetVolumeInfo(ctx)
+		assert.Nil(t, err)
+		err = connection.SetPassword(ctx, "password1234")
+		assert.Nil(t, err)
+		connection.CloseConnection(ctx)
+		Password = "password1234"
+		UserName = "admin"
+		ClearAuthToken()
+		connection, err = connectN(t, addr, 0)
+		if err == nil {
+			_, err = connection.GetVolumeInfo(ctx)
+			assert.Nil(t, err)
+			connection.CloseConnection(ctx)
+			ClearAuthToken()
+		} else {
+			assert.Nil(t, err)
+		}
+		Password = "password123"
+		UserName = "admin"
+		connection, err = connectN(t, addr, 0)
+		assert.NotNil(t, err)
+	} else {
+		assert.Nil(t, err)
+	}
+
+}
+
+func TestCache(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+
+	_, err := connection.SetCacheSize(ctx, tb, true)
+	assert.NotNil(t, err)
+	_, err = connection.SetCacheSize(ctx, int64(20)*gb, true)
+	assert.Nil(t, err)
+	dse, err := connection.DSEInfo(ctx)
+	assert.Equal(t, int64(20)*gb, dse.MaxCacheSize)
+}
+
+func TestSetRWSpeed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	err := connection.SetReadSpeed(ctx, int32(1000))
+	assert.Nil(t, err)
+	err = connection.SetWriteSpeed(ctx, int32(2000))
+	assert.Nil(t, err)
+	dse, err := connection.DSEInfo(ctx)
+	assert.Equal(t, int32(1000), dse.ReadSpeed)
+	assert.Equal(t, int32(2000), dse.WriteSpeed)
+}
+
+func TestSetVolumeSize(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	err := connection.SetVolumeCapacity(ctx, int64(100)*tb)
+	assert.Nil(t, err)
+	vol, err := connection.GetVolumeInfo(ctx)
+	assert.Equal(t, int64(100)*tb, vol.Capactity)
+}
+
+func connectN(t *testing.T, addr string, tries int) (*SdfsConnection, error) {
+	connection, err := NewConnection(addr)
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(10 * time.Second)
+		connection, err = NewConnection(addr)
+		if retrys > tries {
+			break
+		} else {
+			retrys++
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return connection, err
+}
+
+func TestCloudSync(t *testing.T) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli.NegotiateAPIVersion(ctx)
+	imagename := "docker.io/minio/minio:latest"
+	containername := "minio"
+	portopening := "9000"
+	bucket := string(randBytesMaskImpr(16))
+	inputEnv := []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")}
+	cmd := []string{"server", "/data"}
+	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+	assert.Nil(t, err)
+	imagename = "gcr.io/hybrics/hybrics:3.11"
+	containername = string(randBytesMaskImpr(16))
+	portopening = "6442"
+	nport := "6443"
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
+		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
+	cmd = []string{}
+	_, err = runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	assert.Nil(t, err)
+	acontainername := string(randBytesMaskImpr(16))
+	portopening = "6442"
+	nport = "6444"
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
+		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
+	cmd = []string{}
+	_, err = runContainer(cli, imagename, acontainername, nport, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	assert.Nil(t, err)
+
+	daddr, err := connectN(t, "sdfss://localhost:6444", 5)
+	assert.Nil(t, err)
+	defer daddr.CloseConnection(ctx)
+	saddr, err := connectN(t, "sdfss://localhost:6443", 5)
+	defer saddr.CloseConnection(ctx)
+	assert.Nil(t, err)
+	info, err := saddr.GetVolumeInfo(ctx)
+	//time.Sleep(35 * time.Second)
+	cinfo, err := daddr.GetConnectedVolumes(ctx)
+	assert.Equal(t, 2, len(cinfo))
+	fn, sh := makeGenericFile(ctx, t, saddr, "", 1024)
+	fi, err := saddr.Stat(ctx, fn)
+	assert.Nil(t, err)
+	_, err = daddr.SyncFromCloudVolume(ctx, info.SerialNumber, true)
+	assert.Nil(t, err)
+	nfi, err := daddr.Stat(ctx, fn)
+	assert.Nil(t, err)
+	dh := readGenericFile(ctx, t, fn, daddr)
+	assert.Equal(t, dh, sh)
+	assert.Equal(t, fi.Mode, nfi.Mode)
+	fn, sh = makeGenericFile(ctx, t, saddr, "", 1024)
+	fi, err = saddr.Stat(ctx, fn)
+	assert.Nil(t, err)
+	_, err = daddr.SyncCloudVolume(ctx, true)
+	assert.Nil(t, err)
+	stopAndRemoveContainer(cli, "minio")
+	stopAndRemoveContainer(cli, containername)
+	stopAndRemoveContainer(cli, acontainername)
+}
+
+func TestCloud(t *testing.T) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli.NegotiateAPIVersion(ctx)
+	imagename := "docker.io/minio/minio:latest"
+	containername := "minio"
+	portopening := "9000"
+	bucket := string(randBytesMaskImpr(16))
+	inputEnv := []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")}
+	cmd := []string{"server", "/data"}
+	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+	assert.Nil(t, err)
+	imagename = "gcr.io/hybrics/hybrics:3.11"
+	containername = string(randBytesMaskImpr(16))
+	portopening = "6442"
+	nport := "6443"
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
+		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
+	cmd = []string{}
+	_, err = runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	assert.Nil(t, err)
+	acontainername := string(randBytesMaskImpr(16))
+	portopening = "6442"
+	nport = "6444"
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
+		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
+	cmd = []string{}
+	_, err = runContainer(cli, imagename, acontainername, nport, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	assert.Nil(t, err)
+	address = "sdfss://localhost:6443"
+
+	connection, err := NewConnection(address)
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = NewConnection(address)
+		if retrys > 10 {
+			break
+		} else {
+			retrys++
+		}
+	}
+	assert.NotNil(t, connection)
+	connection.CloseConnection(ctx)
+	t.Run("MinioTest", func(t *testing.T) {
+		TestNewConnection(t)
+		TestChow(t)
+		TestMkNod(t)
+		TestMkDir(t)
+		TestMkDirAll(t)
+		cleanStore(t, 80)
+		TestCopyExtent(t)
+		TestCopyFile(t)
+		TestEvents(t)
+		TestInfo(t)
+		TestListDir(t)
+		TestRename(t)
+		TestSetUtime(t)
+		TestStatFS(t)
+		TestSymLink(t)
+		TestTuncate(t)
+		TestXAttrs(t)
+		cloudInfoTest(t)
+		cloudFileTest(t)
+	})
+	address = "sdfss://localhost:6442"
+	stopAndRemoveContainer(cli, "minio")
+	stopAndRemoveContainer(cli, containername)
+	stopAndRemoveContainer(cli, acontainername)
+}
+
+func cloudInfoTest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	info, err := connection.GetConnectedVolumes(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, len(info), 2)
+}
+
+func cloudFileTest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+
+	nconnection, err := NewConnection("sdfss://localhost:6444")
+	assert.Nil(t, err)
+	defer nconnection.CloseConnection(ctx)
+	defer connection.CloseConnection(ctx)
+	fn, hs := makeFile(t, "", int64(1024))
+	stat, err := connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	_, err = nconnection.GetCloudFile(ctx, fn, fn, true, true)
+	assert.Nil(t, err)
+	nstat, err := nconnection.Stat(ctx, fn)
+	assert.Equal(t, stat.Mode, nstat.Mode)
+	assert.Nil(t, err)
+	bs := readGenericFile(ctx, t, fn, nconnection)
+	assert.Equal(t, hs, bs)
+	err = nconnection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+
+	err = connection.MkDir(ctx, "testdir", 511)
+	assert.Nil(t, err)
+	fn, hs = makeFile(t, "testdir", 1024)
+	_, err = nconnection.GetCloudFile(ctx, fn, fn, true, true)
+	assert.Nil(t, err)
+	stat, err = connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	nstat, err = nconnection.Stat(ctx, fn)
+	assert.Equal(t, stat.Mode, nstat.Mode)
+	assert.Nil(t, err)
+	bs = readGenericFile(ctx, t, fn, nconnection)
+	assert.Equal(t, hs, bs)
+	err = nconnection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	_, err = connection.GetAttr(ctx, fn)
+	assert.NotNil(t, err)
+	_, err = nconnection.GetAttr(ctx, fn)
+	assert.NotNil(t, err)
+	//Check Garbage Collection
+	fn, hs = makeFile(t, "", int64(1024))
+	stat, err = connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	_, err = nconnection.GetCloudFile(ctx, fn, fn, true, true)
+	assert.Nil(t, err)
+	nstat, err = nconnection.Stat(ctx, fn)
+	assert.Equal(t, stat.Mode, nstat.Mode)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	cleanStore(t, 80)
+	bs = readGenericFile(ctx, t, fn, nconnection)
+	assert.Equal(t, hs, bs)
+	err = nconnection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	//Test get metadata
+	fn, hs = makeFile(t, "", int64(1024))
+	stat, err = connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	_, err = nconnection.GetCloudMetaFile(ctx, fn, fn, true, true)
+	assert.Nil(t, err)
+	nstat, err = nconnection.Stat(ctx, fn)
+	assert.Equal(t, stat.Mode, nstat.Mode)
+	assert.Nil(t, err)
+	bs = readGenericFile(ctx, t, fn, nconnection)
+	assert.Equal(t, hs, bs)
+	err = nconnection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func readGenericFile(ctx context.Context, t *testing.T, fn string, connection *SdfsConnection) []byte {
+	fh, err := connection.Open(ctx, fn, 0)
+	assert.Nil(t, err)
+	stat, err := connection.Stat(ctx, fn)
+	maxoffset := stat.Size
+	offset := int64(0)
+	b := make([]byte, 0)
+	h, err := blake2b.New(32, b)
+	assert.Nil(t, err)
+	readSize := int32(1024 * 1024)
+	for offset < maxoffset {
+		if readSize > int32(maxoffset-offset) {
+			readSize = int32(maxoffset - offset)
+		}
+		b, err := connection.Read(ctx, fh, offset, int32(readSize))
+		h.Write(b)
+		assert.Nil(t, err)
+		offset += int64(len(b))
+		b = nil
+	}
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+	bs := h.Sum(nil)
+	return bs
+}
+
+func cleanStore(t *testing.T, dur int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	connection := connect(t)
@@ -161,6 +800,7 @@ func TestCleanStore(t *testing.T) {
 		fn, _ := makeFile(t, "", 1024*1024)
 		files = append(files, fn)
 	}
+	_nfn, nh := makeFile(t, "", 1024*1024)
 	info, err := connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	sz := info.CurrentSize
@@ -169,12 +809,71 @@ func TestCleanStore(t *testing.T) {
 	}
 	time.Sleep(10 * time.Second)
 	connection.CleanStore(ctx, true, true)
+	tm := time.Duration(dur * int(time.Second))
+	time.Sleep(tm)
 	info, err = connection.DSEInfo(ctx)
 	nsz := info.CurrentSize
-	assert.NotEqual(t, sz, nsz)
+	assert.Greater(t, sz, nsz)
+	nhn := readFile(t, _nfn, true)
+	assert.Equal(t, nh, nhn)
 	t.Logf("orig = %d new = %d", sz, nsz)
 }
 
+func TestCert(t *testing.T) {
+	DisableTrust = false
+	connection, err := NewConnection(address)
+	assert.NotNil(t, err)
+	assert.Nil(t, connection)
+	err = AddTrustedCert(address)
+	assert.Nil(t, err)
+	DisableTrust = false
+	connection, err = NewConnection(address)
+	assert.NotNil(t, connection)
+	assert.Nil(t, err)
+	user, err := user.Current()
+	configPath := user.HomeDir + "/.sdfs/keys/"
+	addr, _, _, _ := parseURL(address)
+	fn := fmt.Sprintf("%s%s.pem", configPath, addr)
+	err = os.Remove(fn)
+
+	assert.Nil(t, err)
+
+}
+
+func TestUpload(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn := string(randBytesMaskImpr(16))
+	data := randBytesMaskImpr(1024)
+	h, err := blake2b.New(32, make([]byte, 0))
+
+	assert.Nil(t, err)
+	err = ioutil.WriteFile(fn, data, 0777)
+	h.Write(data)
+	bs := h.Sum(nil)
+	wr, err := connection.Upload(ctx, fn, fn)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(len(data)), wr)
+	nhs := readFile(t, fn, false)
+	assert.Equal(t, bs, nhs)
+	nfn := string(randBytesMaskImpr(16))
+	rr, err := connection.Download(ctx, fn, nfn)
+	assert.Equal(t, int64(len(data)), rr)
+	assert.Nil(t, err)
+	ndata, err := ioutil.ReadFile(nfn)
+	h, err = blake2b.New(32, make([]byte, 0))
+	h.Write(ndata)
+	nbs := h.Sum(nil)
+	assert.Equal(t, bs, nbs)
+	os.Remove(nfn)
+	os.Remove(fn)
+	connection.DeleteFile(ctx, fn)
+}
+
+/*
 func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
 	cli, err := client.NewClientWithOpts(client.FromEnv)
@@ -188,7 +887,8 @@ func TestMain(m *testing.M) {
 	containername := string(randBytesMaskImpr(16))
 	portopening := "6442"
 	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000")}
-	_, err = runContainer(cli, imagename, containername, portopening, inputEnv)
+	cmd := []string{}
+	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
 	if err != nil {
 		fmt.Printf("Unable to create docker client %v", err)
 	}
@@ -213,11 +913,12 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Unable to create connection %v", err)
 	}
 	code := m.Run()
-	//stopAndRemoveContainer(cli, containername)
+	stopAndRemoveContainer(cli, containername)
 	os.Exit(code)
 }
+*/
 
-func runContainer(client *client.Client, imagename string, containername string, port string, inputEnv []string) (string, error) {
+func runContainer(client *client.Client, imagename string, containername string, hostPort, port string, inputEnv []string, cmd []string) (string, error) {
 	// Define a PORT opening
 	newport, err := natting.NewPort("tcp", port)
 	if err != nil {
@@ -228,11 +929,12 @@ func runContainer(client *client.Client, imagename string, containername string,
 	// Configured hostConfig:
 	// https://godoc.org/github.com/docker/docker/api/types/container#HostConfig
 	hostConfig := &container.HostConfig{
+		NetworkMode: "testnw",
 		PortBindings: natting.PortMap{
 			newport: []natting.PortBinding{
 				{
 					HostIP:   "0.0.0.0",
-					HostPort: port,
+					HostPort: hostPort,
 				},
 			},
 		},
@@ -253,7 +955,7 @@ func runContainer(client *client.Client, imagename string, containername string,
 	gatewayConfig := &network.EndpointSettings{
 		Gateway: "gatewayname",
 	}
-	networkConfig.EndpointsConfig["bridge"] = gatewayConfig
+	networkConfig.EndpointsConfig["testnw"] = gatewayConfig
 
 	// Define ports to be exposed (has to be same as hostconfig.portbindings.newport)
 	exposedPorts := map[natting.Port]struct{}{
@@ -266,7 +968,10 @@ func runContainer(client *client.Client, imagename string, containername string,
 		Image:        imagename,
 		Env:          inputEnv,
 		ExposedPorts: exposedPorts,
-		Hostname:     fmt.Sprintf("%s-hostnameexample", imagename),
+		Hostname:     containername,
+	}
+	if len(cmd) > 0 {
+		config.Cmd = cmd
 	}
 
 	// Creating the actual container. This is "nil,nil,nil" in every example.
@@ -316,6 +1021,10 @@ func makeFile(t *testing.T, parent string, size int64) (string, []byte) {
 	connection := connect(t)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
+	return makeGenericFile(ctx, t, connection, parent, size)
+}
+
+func makeGenericFile(ctx context.Context, t *testing.T, connection *SdfsConnection, parent string, size int64) (string, []byte) {
 	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
 	err := connection.MkNod(ctx, fn, 511, 0)
 	assert.Nil(t, err)
@@ -344,6 +1053,48 @@ func makeFile(t *testing.T, parent string, size int64) (string, []byte) {
 	assert.Equal(t, stat.Size, maxoffset)
 	err = connection.Release(ctx, fh)
 	return fn, h.Sum(nil)
+}
+
+func readFile(t *testing.T, filenm string, delete bool) []byte {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	stat, err := connection.GetAttr(ctx, filenm)
+	assert.Nil(t, err)
+
+	assert.Greater(t, stat.Size, int64(0))
+	fh, err := connection.Open(ctx, filenm, 0)
+	assert.Nil(t, err)
+	maxoffset := stat.Size
+	offset := int64(0)
+	b := make([]byte, 0)
+	h, err := blake2b.New(32, b)
+	assert.Nil(t, err)
+	readSize := int32(1024 * 1024)
+	for offset < maxoffset {
+		if readSize > int32(maxoffset-offset) {
+			readSize = int32(maxoffset - offset)
+		}
+		b, err := connection.Read(ctx, fh, offset, int32(readSize))
+		h.Write(b)
+		assert.Nil(t, err)
+		offset += int64(len(b))
+		b = nil
+	}
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+
+	if delete {
+		err = connection.DeleteFile(ctx, filenm)
+		assert.Nil(t, err)
+		stat, err = connection.GetAttr(ctx, filenm)
+		assert.NotNil(t, err)
+	}
+
+	connection.CloseConnection(ctx)
+	bs := h.Sum(nil)
+	return bs
 }
 
 func deleteFile(t *testing.T, fn string) {
