@@ -102,7 +102,7 @@ func TestMkDir(t *testing.T) {
 	assert.Equal(t, stat.Mode, int32(16895))
 	err = connection.RmDir(ctx, "testdir")
 	assert.Nil(t, err)
-	stat, err = connection.GetAttr(ctx, "testdir")
+	_, err = connection.GetAttr(ctx, "testdir")
 	assert.NotNil(t, err)
 	connection.CloseConnection(ctx)
 }
@@ -120,11 +120,11 @@ func TestMkDirAll(t *testing.T) {
 	assert.Equal(t, stat.Mode, int32(16832))
 	err = connection.RmDir(ctx, "testdir/t")
 	assert.Nil(t, err)
-	stat, err = connection.GetAttr(ctx, "testdir/t")
+	_, err = connection.GetAttr(ctx, "testdir/t")
 	assert.NotNil(t, err)
 	err = connection.RmDir(ctx, "testdir")
 	assert.Nil(t, err)
-	stat, err = connection.GetAttr(ctx, "testdir")
+	_, err = connection.GetAttr(ctx, "testdir")
 	assert.NotNil(t, err)
 	connection.CloseConnection(ctx)
 }
@@ -220,6 +220,7 @@ func TestEvents(t *testing.T) {
 	evt, err := connection.CopyFile(ctx, fn, nfn, true)
 	assert.Nil(t, err)
 	_, err = connection.WaitForEvent(ctx, evt.Uuid)
+	assert.Nil(t, err)
 	nhash := readFile(t, nfn, false)
 	assert.Equal(t, hash, nhash)
 	err = connection.DeleteFile(ctx, nfn)
@@ -254,6 +255,7 @@ func TestXAttrs(t *testing.T) {
 	assert.NotNil(t, err)
 	fa := []*spb.FileAttributes{{Key: "key1", Value: "value1"}, {Key: "key2", Value: "value2"}}
 	err = connection.SetUserMetaData(ctx, fn, fa)
+	assert.Nil(t, err)
 	_, fal, err := connection.ListDir(ctx, fn, "", false, int32(1000))
 	assert.Nil(t, err)
 	for _, attrs := range fal {
@@ -312,6 +314,7 @@ func TestSymLink(t *testing.T) {
 	err := connection.SymLink(ctx, fn, sfn)
 	assert.Nil(t, err)
 	_sfn, err := connection.ReadLink(ctx, sfn)
+	assert.Nil(t, err)
 	assert.Equal(t, fn, _sfn)
 	_, err = connection.GetAttr(ctx, sfn)
 	assert.Nil(t, err)
@@ -343,6 +346,121 @@ func TestSync(t *testing.T) {
 	err = connection.Release(ctx, fh)
 	assert.Nil(t, err)
 	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestMaxAge(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	info, err := connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	t.Logf("max age : %d", info.MaxAge)
+	err = connection.SetMaxAge(ctx, 1000)
+	assert.Nil(t, err)
+	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(1000), info.MaxAge)
+	t.Logf("new max age : %d", info.MaxAge)
+	fsz := int64(1024 * 1024)
+	_nfn, _ := makeFile(t, "", fsz)
+	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+
+	sz := info.CurrentSize
+	nfn := string(randBytesMaskImpr(16))
+	time.Sleep(10 * time.Second)
+	_, err = connection.Download(ctx, _nfn, "/tmp/"+nfn)
+	defer os.Remove("/tmp/" + nfn)
+	assert.Nil(t, err)
+	_, err = connection.Upload(ctx, "/tmp/"+nfn, nfn)
+	assert.Nil(t, err)
+	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	nsz := info.CurrentSize
+	t.Logf("sz = %d nsz =%d", sz, nsz)
+	assert.Less(t, sz, nsz)
+	err = connection.DeleteFile(ctx, nfn)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, _nfn)
+	assert.Nil(t, err)
+	time.Sleep(10 * time.Second)
+	connection.CleanStore(ctx, true, true)
+	tm := time.Duration(30 * int(time.Second))
+	time.Sleep(tm)
+	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	fnsz := info.CurrentSize
+	t.Logf("sz = %d nsz =%d, fnsz=%d", sz, nsz, fnsz)
+	assert.Greater(t, sz, fnsz)
+	_nfn, hs := makeFile(t, "", fsz)
+	nfn = string(randBytesMaskImpr(16))
+	time.Sleep(10 * time.Second)
+	connection.CopyFile(ctx, _nfn, nfn, false)
+	connection.DeleteFile(ctx, _nfn)
+	time.Sleep(10 * time.Second)
+	connection.CleanStore(ctx, true, true)
+	tm = time.Duration(30 * int(time.Second))
+	time.Sleep(tm)
+	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	fnsz = info.CurrentSize
+	t.Logf("sz = %d, fnsz=%d", sz, fnsz)
+	nhs := readFile(t, nfn, true)
+	assert.Equal(t, hs, nhs)
+	connection.DeleteFile(ctx, _nfn)
+	time.Sleep(10 * time.Second)
+	connection.CleanStore(ctx, true, true)
+	tm = time.Duration(60 * int(time.Second))
+	time.Sleep(tm)
+	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	fnsz = info.CurrentSize
+	t.Logf("sz = %d, fnsz=%d", sz, fnsz)
+	_nfn, _ = makeFile(t, "", fsz)
+	nfn = string(randBytesMaskImpr(16))
+	time.Sleep(10 * time.Second)
+	_, err = connection.Download(ctx, _nfn, "/tmp/"+nfn)
+	assert.Nil(t, err)
+	for i := 0; i < 10; i++ {
+		_, err = connection.Upload(ctx, "/tmp/"+nfn, fmt.Sprintf("file%d", i))
+		if err != nil {
+			t.Logf("upload error %v", err)
+		}
+		info, err := connection.Stat(ctx, fmt.Sprintf("file%d", i))
+		assert.Greater(t, info.IoMonitor.ActualBytesWritten, int64(0))
+		assert.Nil(t, err)
+		time.Sleep(10 * time.Second)
+	}
+	info, _ = connection.DSEInfo(ctx)
+	sz = info.CurrentSize
+	connection.DeleteFile(ctx, _nfn)
+	time.Sleep(10 * time.Second)
+	connection.CleanStore(ctx, true, true)
+	tm = time.Duration(60 * int(time.Second))
+	time.Sleep(tm)
+	info, _ = connection.DSEInfo(ctx)
+	nsz = info.CurrentSize
+	t.Logf("sz = %d, nsz=%d", sz, nsz)
+	assert.Less(t, nsz, sz)
+	for i := 0; i < 10; i++ {
+		err = connection.DeleteFile(ctx, fmt.Sprintf("file%d", i))
+		if err != nil {
+			t.Logf("upload error %v", err)
+		}
+	}
+	time.Sleep(10 * time.Second)
+	connection.CleanStore(ctx, true, true)
+	tm = time.Duration(60 * int(time.Second))
+	time.Sleep(tm)
+	info, _ = connection.DSEInfo(ctx)
+	sz = info.CurrentSize
+	t.Logf("sz = %d, nsz=%d", sz, nsz)
+	assert.Less(t, sz, nsz)
+	os.Remove("/tmp/" + nfn)
+	err = connection.SetMaxAge(ctx, -1)
 	assert.Nil(t, err)
 }
 
@@ -414,7 +532,7 @@ func TestGCSchedule(t *testing.T) {
 }
 
 func TestSetPassword(t *testing.T) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, _ := client.NewClientWithOpts(client.FromEnv)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli.NegotiateAPIVersion(ctx)
@@ -422,18 +540,19 @@ func TestSetPassword(t *testing.T) {
 	containername := string(randBytesMaskImpr(16))
 	portopening := "6442"
 	nport := "6443"
-	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000"),
+	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
 		fmt.Sprintf("PASSWORD=%s", "password123"), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
 	cmd := []string{}
-	_, err = runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
+	_, err := runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
 	defer stopAndRemoveContainer(cli, containername)
 	assert.Nil(t, err)
+	verbose = true
 	addr := "sdfss://localhost:6443"
-	connection, err := connectN(t, addr, 4)
+	_, err = connectN(t, addr, 4)
 	assert.NotNil(t, err)
 	Password = "password123"
 	UserName = "admin"
-	connection, err = connectN(t, addr, 0)
+	connection, err := connectN(t, addr, 0)
 	assert.Nil(t, err)
 	if err == nil {
 		_, err = connection.GetVolumeInfo(ctx)
@@ -445,6 +564,7 @@ func TestSetPassword(t *testing.T) {
 		UserName = "admin"
 		ClearAuthToken()
 		connection, err = connectN(t, addr, 0)
+
 		if err == nil {
 			_, err = connection.GetVolumeInfo(ctx)
 			assert.Nil(t, err)
@@ -456,8 +576,12 @@ func TestSetPassword(t *testing.T) {
 		Password = "password123"
 		UserName = "admin"
 		connection, err = connectN(t, addr, 0)
+		if connection != nil {
+			connection.CloseConnection(ctx)
+		}
 		assert.NotNil(t, err)
 	} else {
+		t.Logf("error = %v\n", err)
 		assert.Nil(t, err)
 	}
 
@@ -475,6 +599,7 @@ func TestCache(t *testing.T) {
 	_, err = connection.SetCacheSize(ctx, int64(20)*gb, true)
 	assert.Nil(t, err)
 	dse, err := connection.DSEInfo(ctx)
+	assert.Nil(t, err)
 	assert.Equal(t, int64(20)*gb, dse.MaxCacheSize)
 }
 
@@ -489,6 +614,7 @@ func TestSetRWSpeed(t *testing.T) {
 	err = connection.SetWriteSpeed(ctx, int32(2000))
 	assert.Nil(t, err)
 	dse, err := connection.DSEInfo(ctx)
+	assert.Nil(t, err)
 	assert.Equal(t, int32(1000), dse.ReadSpeed)
 	assert.Equal(t, int32(2000), dse.WriteSpeed)
 }
@@ -502,6 +628,7 @@ func TestSetVolumeSize(t *testing.T) {
 	err := connection.SetVolumeCapacity(ctx, int64(100)*tb)
 	assert.Nil(t, err)
 	vol, err := connection.GetVolumeInfo(ctx)
+	assert.Nil(t, err)
 	assert.Equal(t, int64(100)*tb, vol.Capactity)
 }
 
@@ -526,6 +653,7 @@ func connectN(t *testing.T, addr string, tries int) (*SdfsConnection, error) {
 
 func TestCloudSync(t *testing.T) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
+	assert.Nil(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli.NegotiateAPIVersion(ctx)
@@ -541,7 +669,7 @@ func TestCloudSync(t *testing.T) {
 	containername = string(randBytesMaskImpr(16))
 	portopening = "6442"
 	nport := "6443"
-	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
 		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 	cmd = []string{}
@@ -553,7 +681,7 @@ func TestCloudSync(t *testing.T) {
 	acontainername := string(randBytesMaskImpr(16))
 	portopening = "6442"
 	nport = "6444"
-	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
 		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 	cmd = []string{}
@@ -570,8 +698,10 @@ func TestCloudSync(t *testing.T) {
 	defer saddr.CloseConnection(ctx)
 	assert.Nil(t, err)
 	info, err := saddr.GetVolumeInfo(ctx)
+	assert.Nil(t, err)
 	//time.Sleep(35 * time.Second)
 	cinfo, err := daddr.GetConnectedVolumes(ctx)
+	assert.Nil(t, err)
 	assert.Equal(t, 2, len(cinfo))
 	fn, sh := makeGenericFile(ctx, t, saddr, "", 1024)
 	fi, err := saddr.Stat(ctx, fn)
@@ -583,8 +713,8 @@ func TestCloudSync(t *testing.T) {
 	dh := readGenericFile(ctx, t, fn, daddr)
 	assert.Equal(t, dh, sh)
 	assert.Equal(t, fi.Mode, nfi.Mode)
-	fn, sh = makeGenericFile(ctx, t, saddr, "", 1024)
-	fi, err = saddr.Stat(ctx, fn)
+	fn, _ = makeGenericFile(ctx, t, saddr, "", 1024)
+	_, err = saddr.Stat(ctx, fn)
 	assert.Nil(t, err)
 	_, err = daddr.SyncCloudVolume(ctx, true)
 	assert.Nil(t, err)
@@ -595,6 +725,7 @@ func TestCloudSync(t *testing.T) {
 
 func TestCloud(t *testing.T) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
+	assert.Nil(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli.NegotiateAPIVersion(ctx)
@@ -610,7 +741,7 @@ func TestCloud(t *testing.T) {
 	containername = string(randBytesMaskImpr(16))
 	portopening = "6442"
 	nport := "6443"
-	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
 		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 	cmd = []string{}
@@ -622,7 +753,7 @@ func TestCloud(t *testing.T) {
 	acontainername := string(randBytesMaskImpr(16))
 	portopening = "6442"
 	nport = "6444"
-	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled"),
+	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", bucket),
 		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 	cmd = []string{}
@@ -767,6 +898,7 @@ func readGenericFile(ctx context.Context, t *testing.T, fn string, connection *S
 	fh, err := connection.Open(ctx, fn, 0)
 	assert.Nil(t, err)
 	stat, err := connection.Stat(ctx, fn)
+	assert.Nil(t, err)
 	maxoffset := stat.Size
 	offset := int64(0)
 	b := make([]byte, 0)
@@ -812,6 +944,7 @@ func cleanStore(t *testing.T, dur int) {
 	tm := time.Duration(dur * int(time.Second))
 	time.Sleep(tm)
 	info, err = connection.DSEInfo(ctx)
+	assert.Nil(t, err)
 	nsz := info.CurrentSize
 	assert.Greater(t, sz, nsz)
 	nhn := readFile(t, _nfn, true)
@@ -831,6 +964,7 @@ func TestCert(t *testing.T) {
 	assert.NotNil(t, connection)
 	assert.Nil(t, err)
 	user, err := user.Current()
+	assert.Nil(t, err)
 	configPath := user.HomeDir + "/.sdfs/keys/"
 	addr, _, _, _ := parseURL(address)
 	fn := fmt.Sprintf("%s%s.pem", configPath, addr)
@@ -852,6 +986,7 @@ func TestUpload(t *testing.T) {
 
 	assert.Nil(t, err)
 	err = ioutil.WriteFile(fn, data, 0777)
+	assert.Nil(t, err)
 	h.Write(data)
 	bs := h.Sum(nil)
 	wr, err := connection.Upload(ctx, fn, fn)
@@ -864,7 +999,9 @@ func TestUpload(t *testing.T) {
 	assert.Equal(t, int64(len(data)), rr)
 	assert.Nil(t, err)
 	ndata, err := ioutil.ReadFile(nfn)
+	assert.Nil(t, err)
 	h, err = blake2b.New(32, make([]byte, 0))
+	assert.Nil(t, err)
 	h.Write(ndata)
 	nbs := h.Sum(nil)
 	assert.Equal(t, bs, nbs)
@@ -873,7 +1010,6 @@ func TestUpload(t *testing.T) {
 	connection.DeleteFile(ctx, fn)
 }
 
-/*
 func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
 	cli, err := client.NewClientWithOpts(client.FromEnv)
@@ -886,7 +1022,7 @@ func TestMain(m *testing.M) {
 	imagename := "gcr.io/hybrics/hybrics:3.11"
 	containername := string(randBytesMaskImpr(16))
 	portopening := "6442"
-	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), fmt.Sprintf("EXTENDED_CMD=--hashtable-rm-threshold=1000")}
+	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
 	cmd := []string{}
 	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
 	if err != nil {
@@ -916,8 +1052,6 @@ func TestMain(m *testing.M) {
 	stopAndRemoveContainer(cli, containername)
 	os.Exit(code)
 }
-*/
-
 func runContainer(client *client.Client, imagename string, containername string, hostPort, port string, inputEnv []string, cmd []string) (string, error) {
 	// Define a PORT opening
 	newport, err := natting.NewPort("tcp", port)
@@ -959,7 +1093,7 @@ func runContainer(client *client.Client, imagename string, containername string,
 
 	// Define ports to be exposed (has to be same as hostconfig.portbindings.newport)
 	exposedPorts := map[natting.Port]struct{}{
-		newport: struct{}{},
+		newport: {},
 	}
 
 	// Configuration
@@ -1049,9 +1183,9 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *SdfsConnecti
 		offset += int64(len(b))
 		b = nil
 	}
-	stat, err = connection.GetAttr(ctx, fn)
+	stat, _ = connection.GetAttr(ctx, fn)
 	assert.Equal(t, stat.Size, maxoffset)
-	err = connection.Release(ctx, fh)
+	_ = connection.Release(ctx, fh)
 	return fn, h.Sum(nil)
 }
 
@@ -1088,7 +1222,7 @@ func readFile(t *testing.T, filenm string, delete bool) []byte {
 	if delete {
 		err = connection.DeleteFile(ctx, filenm)
 		assert.Nil(t, err)
-		stat, err = connection.GetAttr(ctx, filenm)
+		_, err = connection.GetAttr(ctx, filenm)
 		assert.NotNil(t, err)
 	}
 

@@ -23,6 +23,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	lsize := flagSet.String("volume-size", ".", "Sets the local cache size for the Dedupe Storage Engine")
 	rspeed := flagSet.String("read-speed", "-1", "Sets the max read speed from storage for blocks in KB/s")
 	wspeed := flagSet.String("write-speed", "-1", "Sets the max write speed from storage for blocks in KB/s")
+	kage := flagSet.Int64("max-key-age", -1, "Sets the maximum age of a deduplication entry that can be referenced. If set to -1 the age is infinite.")
 	vinfo := flagSet.Bool("volume", false, "Returns Volume Info")
 	dinfo := flagSet.Bool("dse", false, "Returns Dedupe Storage Info")
 	sinfo := flagSet.Bool("system", false, "System Info")
@@ -86,6 +87,14 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		fmt.Printf("Volume Size Set to : %s \n", FormatSize(size))
 	}
+	if IsFlagPassed("max-key-age", flagSet) {
+		err := connection.SetMaxAge(ctx, *kage)
+		if err != nil {
+			fmt.Printf("Unable to set max age to : %v ms, error: %v\n", *kage, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Set Max Age To : %v ms\n", *kage)
+	}
 	if IsFlagPassed("read-speed", flagSet) {
 		size, err := strconv.Atoi(*rspeed)
 		if err != nil {
@@ -99,6 +108,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		fmt.Printf("Read Speed Set to : %s \n", FormatSize(int64(size)))
 	}
+
 	if IsFlagPassed("write-speed", flagSet) {
 		size, err := strconv.Atoi(*wspeed)
 		if err != nil {
@@ -223,32 +233,32 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			os.Exit(1)
 		}
 		data := [][]string{
-			[]string{"ID", strconv.FormatInt(volumeInfo.SerialNumber, 10)},
-			[]string{"Name", volumeInfo.Name},
-			[]string{"Capacity Formatted", FormatSize(volumeInfo.Capactity)},
-			[]string{"Capacity Bytes", strconv.FormatInt(volumeInfo.Capactity, 10)},
-			[]string{"Used Formatted", FormatSize(volumeInfo.CurrentSize)},
-			[]string{"Used Bytes", strconv.FormatInt(volumeInfo.CurrentSize, 10)},
-			[]string{"Compressed Formatted", FormatSize(volumeInfo.DseCompSize)},
-			[]string{"Compressed Bytes", strconv.FormatInt(volumeInfo.DseCompSize, 10)},
-			[]string{"Duplicate Formatted", FormatSize(volumeInfo.DuplicateBytes)},
-			[]string{"Duplicate Bytes", strconv.FormatInt(volumeInfo.DuplicateBytes, 10)},
-			[]string{"Max Percentage Full", fmt.Sprintf("%.2f%%", volumeInfo.MaxPercentageFull*100)},
-			[]string{"Files", strconv.FormatInt(volumeInfo.Files, 10)},
-			[]string{"Offline", strconv.FormatBool(volumeInfo.Offline)},
-			[]string{"Allow External Links", strconv.FormatBool(volumeInfo.AllowExternalLinks)},
-			[]string{"Compress Metadata", strconv.FormatBool(volumeInfo.CompressedMetaData)},
-			[]string{"Use Perf Mon", strconv.FormatBool(volumeInfo.UsePerfMon)},
-			[]string{"Perfmon File", volumeInfo.PerfMonFile},
-			[]string{"Volume Path", volumeInfo.Path},
-			[]string{"Read Bytes", fmt.Sprintf("%f", volumeInfo.ReadBytes)},
-			[]string{"Read OPS", fmt.Sprintf("%f", volumeInfo.ReadOps)},
-			[]string{"Read Timeout (s)", fmt.Sprintf("%d", volumeInfo.ReadTimeoutSeconds)},
-			[]string{"Read Errors", strconv.FormatInt(volumeInfo.ReadErrors, 10)},
-			[]string{"Write Bytes", fmt.Sprintf("%d", volumeInfo.WriteBytes)},
-			[]string{"Write OPS", fmt.Sprintf("%f", volumeInfo.WriteOps)},
-			[]string{"Write Timeout (s)", fmt.Sprintf("%d", volumeInfo.WriteTimeoutSeconds)},
-			[]string{"Write Errors", strconv.FormatInt(volumeInfo.WriteErrors, 10)},
+			{"ID", strconv.FormatInt(volumeInfo.SerialNumber, 10)},
+			{"Name", volumeInfo.Name},
+			{"Capacity Formatted", FormatSize(volumeInfo.Capactity)},
+			{"Capacity Bytes", strconv.FormatInt(volumeInfo.Capactity, 10)},
+			{"Used Formatted", FormatSize(volumeInfo.CurrentSize)},
+			{"Used Bytes", strconv.FormatInt(volumeInfo.CurrentSize, 10)},
+			{"Compressed Formatted", FormatSize(volumeInfo.DseCompSize)},
+			{"Compressed Bytes", strconv.FormatInt(volumeInfo.DseCompSize, 10)},
+			{"Duplicate Formatted", FormatSize(volumeInfo.DuplicateBytes)},
+			{"Duplicate Bytes", strconv.FormatInt(volumeInfo.DuplicateBytes, 10)},
+			{"Max Percentage Full", fmt.Sprintf("%.2f%%", volumeInfo.MaxPercentageFull*100)},
+			{"Files", strconv.FormatInt(volumeInfo.Files, 10)},
+			{"Offline", strconv.FormatBool(volumeInfo.Offline)},
+			{"Allow External Links", strconv.FormatBool(volumeInfo.AllowExternalLinks)},
+			{"Compress Metadata", strconv.FormatBool(volumeInfo.CompressedMetaData)},
+			{"Use Perf Mon", strconv.FormatBool(volumeInfo.UsePerfMon)},
+			{"Perfmon File", volumeInfo.PerfMonFile},
+			{"Volume Path", volumeInfo.Path},
+			{"Read Bytes", fmt.Sprintf("%f", volumeInfo.ReadBytes)},
+			{"Read OPS", fmt.Sprintf("%f", volumeInfo.ReadOps)},
+			{"Read Timeout (s)", fmt.Sprintf("%d", volumeInfo.ReadTimeoutSeconds)},
+			{"Read Errors", strconv.FormatInt(volumeInfo.ReadErrors, 10)},
+			{"Write Bytes", fmt.Sprintf("%d", volumeInfo.WriteBytes)},
+			{"Write OPS", fmt.Sprintf("%f", volumeInfo.WriteOps)},
+			{"Write Timeout (s)", fmt.Sprintf("%d", volumeInfo.WriteTimeoutSeconds)},
+			{"Write Errors", strconv.FormatInt(volumeInfo.WriteErrors, 10)},
 		}
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"Volume Info", ""})
@@ -267,26 +277,27 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			os.Exit(1)
 		}
 		data := [][]string{
-			[]string{"Cache Size Formatted", FormatSize(dInfo.CacheSize)},
-			[]string{"Cache Size Bytes", strconv.FormatInt(dInfo.CacheSize, 10)},
-			[]string{"Max Cache Size Formatted", FormatSize(dInfo.MaxCacheSize)},
-			[]string{"Max Cache Size Bytes", strconv.FormatInt(dInfo.MaxCacheSize, 10)},
-			[]string{"Current Size Formatted", FormatSize(dInfo.CurrentSize)},
-			[]string{"Current Size Bytes", strconv.FormatInt(dInfo.CurrentSize, 10)},
-			[]string{"Compressed Size Formatted", FormatSize(dInfo.CompressedSize)},
-			[]string{"Compressed Size Bytes", strconv.FormatInt(dInfo.CompressedSize, 10)},
-			[]string{"HashTable Entries", strconv.FormatInt(dInfo.Entries, 10)},
-			[]string{"Max Page Size", strconv.FormatInt(dInfo.PageSize, 10)},
-			[]string{"Storage Driver", dInfo.StorageType},
-			[]string{"Cloud Access Key", dInfo.CloudAccessKey},
-			[]string{"Cloud Secret Key", dInfo.CloudSecretKey},
-			[]string{"Encryption IV", dInfo.EncryptionIV},
-			[]string{"Encryption Key", dInfo.EncryptionKey},
-			[]string{"Listen Host", dInfo.ListenHost},
-			[]string{"Listen Port", fmt.Sprintf("%d", dInfo.ListenPort)},
-			[]string{"Listen Encrypted", fmt.Sprintf("%t", dInfo.ListenEncrypted)},
-			[]string{"Read Speed", fmt.Sprintf("%d KB/s", dInfo.ReadSpeed)},
-			[]string{"Write Speed", fmt.Sprintf("%d KB/s", dInfo.WriteSpeed)},
+			{"Cache Size Formatted", FormatSize(dInfo.CacheSize)},
+			{"Cache Size Bytes", strconv.FormatInt(dInfo.CacheSize, 10)},
+			{"Max Cache Size Formatted", FormatSize(dInfo.MaxCacheSize)},
+			{"Max Cache Size Bytes", strconv.FormatInt(dInfo.MaxCacheSize, 10)},
+			{"Current Size Formatted", FormatSize(dInfo.CurrentSize)},
+			{"Current Size Bytes", strconv.FormatInt(dInfo.CurrentSize, 10)},
+			{"Compressed Size Formatted", FormatSize(dInfo.CompressedSize)},
+			{"Compressed Size Bytes", strconv.FormatInt(dInfo.CompressedSize, 10)},
+			{"HashTable Entries", strconv.FormatInt(dInfo.Entries, 10)},
+			{"Max Page Size", strconv.FormatInt(dInfo.PageSize, 10)},
+			{"Storage Driver", dInfo.StorageType},
+			{"Cloud Access Key", dInfo.CloudAccessKey},
+			{"Cloud Secret Key", dInfo.CloudSecretKey},
+			{"Encryption IV", dInfo.EncryptionIV},
+			{"Encryption Key", dInfo.EncryptionKey},
+			{"Listen Host", dInfo.ListenHost},
+			{"Listen Port", fmt.Sprintf("%d", dInfo.ListenPort)},
+			{"Listen Encrypted", fmt.Sprintf("%t", dInfo.ListenEncrypted)},
+			{"Read Speed", fmt.Sprintf("%d KB/s", dInfo.ReadSpeed)},
+			{"Write Speed", fmt.Sprintf("%d KB/s", dInfo.WriteSpeed)},
+			{"Max Key Age", fmt.Sprintf("%d ms", dInfo.MaxAge)},
 		}
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"DSE Info", ""})

@@ -101,13 +101,13 @@ func clientInterceptor(
 			_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
 			err = invoker(_ctx, method, req, reply, cc, opts...)
 			if verbose {
-				log.Printf("status code %s for method %s", status.Code(err), method)
+				log.Printf("unauthenticated status code %s for method %s", status.Code(err), method)
 			}
 			return err
 
 		}
-		if verbose {
-			log.Printf("status code %s for method %s", status.Code(err), method)
+		if verbose && err != nil {
+			log.Printf("authenticated status code %s for method %s", status.Code(err), method)
 		}
 		return err
 	}
@@ -168,8 +168,10 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 	vc := spb.NewVolumeServiceClient(conn)
 	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: "admin", Password: creds.Password})
 	if err != nil {
+		log.Printf("did not connect: %v", err)
 		return token, err
 	} else if auth.GetErrorCode() > 0 && auth.GetErrorCode() != spb.ErrorCodes_EEXIST {
+		log.Printf("did not connect: %v", auth)
 		return token, &SdfsError{Err: auth.GetError(), ErrorCode: auth.GetErrorCode()}
 	}
 	token = auth.GetToken()
@@ -204,6 +206,7 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 		if DisableTrust {
 			creds.DisableTrust = true
 		}
+
 		if len(Password) > 0 {
 			creds.Password = Password
 		}
@@ -234,7 +237,6 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	if len(Password) > 0 {
 		creds.Password = Password
 	}
-
 	return creds, nil
 
 }
@@ -635,6 +637,17 @@ func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *sp
 
 		}
 	}
+}
+
+func (n *SdfsConnection) SetMaxAge(ctx context.Context, maxAge int64) error {
+	fi, err := n.vc.SetMaxAge(ctx, &spb.SetMaxAgeRequest{MaxAge: maxAge})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
 }
 
 //GetXAttrSize gets the list size for attributes. This is useful for a fuse implementation

@@ -148,7 +148,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"File Name", "Logical Size", "Physical Size", "Dedupe Rate", "Modified", "Symlink", "Type"})
 		for _, v := range fInfo {
-			if v.Type == 0 {
+			if v.Type == 0 && !v.Symlink {
+
 				iom := v.IoMonitor
 				dedupeRate := 100.0
 				if iom.ActualBytesWritten > 0 && v.Size > 0 {
@@ -160,7 +161,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 					strconv.FormatInt(v.Size, 10),
 					strconv.FormatInt(iom.ActualBytesWritten, 10),
 					fmt.Sprintf("%.2f%%", dedupeRate),
-					t.String(), fmt.Sprintf("%t", v.Symlink), "file"})
+					t.String(), fmt.Sprintf("%t", v.Symlink), v.Type.String()})
 
 			} else {
 				t := time.Unix(0, v.Mtime*int64(time.Millisecond))
@@ -170,7 +171,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 					"",
 					t.String(),
 					fmt.Sprintf("%t", v.Symlink),
-					"dir"})
+					v.Type.String()})
 			}
 		}
 		table.SetAlignment(tablewriter.ALIGN_LEFT)

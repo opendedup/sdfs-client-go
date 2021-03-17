@@ -4,7 +4,6 @@ package sdfs
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -34,6 +33,7 @@ type VolumeServiceClient interface {
 	SetWriteSpeed(ctx context.Context, in *SpeedRequest, opts ...grpc.CallOption) (*SpeedResponse, error)
 	SyncFromCloudVolume(ctx context.Context, in *SyncFromVolRequest, opts ...grpc.CallOption) (*SyncFromVolResponse, error)
 	SyncCloudVolume(ctx context.Context, in *SyncVolRequest, opts ...grpc.CallOption) (*SyncVolResponse, error)
+	SetMaxAge(ctx context.Context, in *SetMaxAgeRequest, opts ...grpc.CallOption) (*SetMaxAgeResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -188,6 +188,15 @@ func (c *volumeServiceClient) SyncCloudVolume(ctx context.Context, in *SyncVolRe
 	return out, nil
 }
 
+func (c *volumeServiceClient) SetMaxAge(ctx context.Context, in *SetMaxAgeRequest, opts ...grpc.CallOption) (*SetMaxAgeResponse, error) {
+	out := new(SetMaxAgeResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.VolumeService/SetMaxAge", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility
@@ -208,6 +217,7 @@ type VolumeServiceServer interface {
 	SetWriteSpeed(context.Context, *SpeedRequest) (*SpeedResponse, error)
 	SyncFromCloudVolume(context.Context, *SyncFromVolRequest) (*SyncFromVolResponse, error)
 	SyncCloudVolume(context.Context, *SyncVolRequest) (*SyncVolResponse, error)
+	SetMaxAge(context.Context, *SetMaxAgeRequest) (*SetMaxAgeResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -262,6 +272,9 @@ func (*UnimplementedVolumeServiceServer) SyncFromCloudVolume(context.Context, *S
 }
 func (*UnimplementedVolumeServiceServer) SyncCloudVolume(context.Context, *SyncVolRequest) (*SyncVolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SyncCloudVolume not implemented")
+}
+func (*UnimplementedVolumeServiceServer) SetMaxAge(context.Context, *SetMaxAgeRequest) (*SetMaxAgeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetMaxAge not implemented")
 }
 func (*UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 
@@ -557,6 +570,24 @@ func _VolumeService_SyncCloudVolume_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_SetMaxAge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMaxAgeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).SetMaxAge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.VolumeService/SetMaxAge",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).SetMaxAge(ctx, req.(*SetMaxAgeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _VolumeService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.VolumeService",
 	HandlerType: (*VolumeServiceServer)(nil),
@@ -624,6 +655,10 @@ var _VolumeService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SyncCloudVolume",
 			Handler:    _VolumeService_SyncCloudVolume_Handler,
+		},
+		{
+			MethodName: "SetMaxAge",
+			Handler:    _VolumeService_SetMaxAge_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
