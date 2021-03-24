@@ -96,6 +96,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 
 	if *version {
 		fmt.Printf("Version : %s\n", Version)
+		fmt.Printf("Build Date: %s\n", BuildDate)
 		os.Exit(0)
 	}
 	if !IsFlagPassed("address", flagSet) {

@@ -8,6 +8,7 @@ import (
 )
 
 var Version = "development"
+var BuildDate = "NAN"
 
 func main() {
 
