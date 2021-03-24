@@ -5,6 +5,8 @@ GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 
 VERSION ?= $(shell git describe --tags)
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+HASH := $(shell git rev-parse HEAD)
 TAG ?= "sdfs/sdfscli:$(VERSION)"
 
 all: build
@@ -38,8 +40,8 @@ lint:
 build:
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
-	@go build -o ./build/sdfscli app/* 
-
+	@go build -ldflags="-X 'main.Version=$(BRANCH)'" -o ./build/sdfscli app/* 
+	
 # Builds sdfscli and installs it to $GOPATH/bin.
 install: build
 	@echo "Installing sdfscli binary to '$(GOPATH)/bin/sdfscli'"
