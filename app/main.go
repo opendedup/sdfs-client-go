@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+var Version = "development"
+
 func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -14,6 +16,7 @@ func main() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	fileCmd := flag.NewFlagSet("file", flag.ExitOnError)
 	cloudCmd := flag.NewFlagSet("cloud", flag.ExitOnError)
+
 	/*
 		flag.Parse()
 		if len(os.Args) == 1 {
