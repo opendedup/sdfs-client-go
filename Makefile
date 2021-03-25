@@ -40,7 +40,7 @@ lint:
 build:
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
-	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Ins)'" -o ./build/sdfscli app/* 
+	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli app/* 
 
 # Builds sdfscli and installs it to $GOPATH/bin.
 install: build

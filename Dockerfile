@@ -8,7 +8,8 @@ ENV GO111MODULE on
 COPY ./ /go/sdfs-client-go
 
 RUN  \
-     apk add --no-cache git && \
+     apk add --no-cache git build-base && \
      cd /go/sdfs-client-go && \
-     mkdir -p /go/sdfs-client-go/build && \
-     go build -o /go/sdfs-client-go/build/sdfscli app/*
+     mkdir -p /go/sdfs-client-go/build
+WORKDIR /go/sdfs-client-go/
+RUN make clean && make build
