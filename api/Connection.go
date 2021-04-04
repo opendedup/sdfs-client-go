@@ -427,7 +427,6 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
-
 	return &SdfsConnection{clnt: conn, vc: vc, fc: fc, evt: evt}, nil
 }
 
