@@ -379,7 +379,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	defer cancel()
-	if useSSL == true {
+	if useSSL {
 		config := &tls.Config{}
 		if creds.DisableTrust {
 			config = &tls.Config{
@@ -401,7 +401,10 @@ func NewConnection(path string) (*SdfsConnection, error) {
 
 		//fmt.Printf("TLS Connecting to %s  disable_trust=%t\n", address, creds.DisableTrust)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
-
+		if err != nil {
+			log.Printf("did not connect to %s : %v\n", path, err)
+			return nil, fmt.Errorf("unable to initialize sdfsClient")
+		}
 	} else {
 		//fmt.Printf("Connecting to %s \n", address)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor))
@@ -419,16 +422,12 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	vc := spb.NewVolumeServiceClient(conn)
 	_, err = vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
 	if err != nil {
+		log.Printf("did not execute gc command: %v\n", err)
 		return nil, err
 	}
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
-
 	return &SdfsConnection{clnt: conn, vc: vc, fc: fc, evt: evt}, nil
-}
-
-func (n *SdfsConnection) sdfsPathJoin(args ...string) string {
-	return path.Join(args...)
 }
 
 //RmDir removes a given directory
@@ -1174,10 +1173,11 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	var offset int64 = 0
 	var n1 int = 0
 	r, err := os.Open(src)
-	defer r.Close()
 	if err != nil {
 		return -1, err
 	}
+	defer r.Close()
+
 	n1, err = r.Read(b1)
 	s := make([]byte, n1)
 	copy(s, b1)
@@ -1256,6 +1256,9 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 	var blocksize int32 = 128 * 1024
 	var length = fi.GetResponse()[0].Size
 	writer, err := os.Create(dst)
+	if err != nil {
+		return -1, err
+	}
 	defer writer.Close()
 	for read < length {
 		if blocksize > int32(length-read) {

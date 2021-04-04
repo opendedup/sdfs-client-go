@@ -25,12 +25,12 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	delfile := flagSet.String("delete", ".", "Deletes a file")
 	mkdir := flagSet.String("mkdir", ".", "Creates a directory")
 	linfo := flagSet.String("list", ".", "Returns File Info in list format")
-	finfo := flagSet.String("file-detail", ".", "Returns Detailed File Info")
+	finfo := flagSet.String("detail", ".", "Returns Detailed File Info")
 	fattr := flagSet.String("attributes", ".", "Returns File Attributes")
 	sattr := flagSet.String("attribute", ".", "Sets A File Attribute")
 	key := flagSet.String("key", "key", "The Attribute Key")
 	value := flagSet.String("value", "value", "The Attribute Value")
-	fio := flagSet.String("stats", ".", "Returns File Dedupe Rates and other IO Attributes")
+	fio := flagSet.String("io", ".", "Returns File Dedupe Rates and other IO Attributes")
 	connection := ParseAndConnect(flagSet)
 	if IsFlagPassed("mkdir", flagSet) {
 		err := connection.MkDirAll(ctx, *mkdir)
@@ -179,7 +179,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Render()
 	}
 
-	if IsFlagPassed("file-detail", flagSet) {
+	if IsFlagPassed("detail", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *finfo, "", false, int32(1000000))
 		if err != nil {
@@ -215,7 +215,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
 				table.Append([]string{"File Open", fmt.Sprintf("%t", v.Open)})
 				table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
-				table.Append([]string{"Symlink Path", fmt.Sprintf("%s", v.SymlinkPath)})
+				table.Append([]string{"Symlink Path", v.SymlinkPath})
 				table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
 
 			} else {
@@ -298,7 +298,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 					table.Append([]string{"Group ID", fmt.Sprintf("%d", v.GroupId)})
 					table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
 					table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
-					table.Append([]string{"Symlink Path", fmt.Sprintf("%s", v.SymlinkPath)})
+					table.Append([]string{"Symlink Path", v.SymlinkPath})
 					table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
 				}
 				table.Append([]string{"Event Type", fmt.Sprintf("%s", fInfo.Action)})
@@ -309,7 +309,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 	}
 
-	if IsFlagPassed("file-attributes", flagSet) {
+	if IsFlagPassed("attributes", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *fattr, "", false, int32(1000000))
 		if err != nil {
@@ -335,7 +335,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	}
 
-	if IsFlagPassed("file-io", flagSet) {
+	if IsFlagPassed("io", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *fio, "", false, int32(1000000))
 		if err != nil {
