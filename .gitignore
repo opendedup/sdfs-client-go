@@ -1,3 +1,5 @@
 *sdfscli*
 build/
 file.txt
+dedupe/Dedupe.go
+keys/

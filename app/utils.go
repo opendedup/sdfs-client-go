@@ -89,7 +89,11 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	disableTrust := flagSet.Bool("trust-all", false, "Trust Self Signed TLS Certs")
 	version := flagSet.Bool("version", false, "Get the version number")
 	trustCert := flagSet.Bool("trust-cert", false, "Trust the certificate for url specified. This will download and store the certificate in $HOME/.sdfs/keys")
-
+	mtls := flagSet.Bool("mtls", false, "Use Mutual TLS. This will use the certs located in $HOME/.sdfs/keys/[client.crt,client.key,ca.crt]"+
+		"unless otherwise specified")
+	mtlsca := flagSet.String("root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
+	mtlskey := flagSet.String("mtls-key", "", "The path the private used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.key")
+	mtlscert := flagSet.String("mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
 	flagSet.Parse(os.Args[2:])
 
 	if *version {
@@ -111,6 +115,15 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 			os.Exit(1)
 		}
 	}
+	if IsFlagPassed("root-ca", flagSet) {
+		pb.MtlsCACert = *mtlsca
+	}
+	if IsFlagPassed("mtls-key", flagSet) {
+		pb.MtlsKey = *mtlskey
+	}
+	if IsFlagPassed("mtls-cert", flagSet) {
+		pb.MtlsCert = *mtlscert
+	}
 
 	if IsFlagPassed("pwd", flagSet) {
 		pb.UserName = "admin"
@@ -118,8 +131,12 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 
 	}
 	if *disableTrust {
-		fmt.Println("TLS Verification Disabled")
+		//fmt.Println("TLS Verification Disabled")
 		pb.DisableTrust = *disableTrust
+	}
+	if *mtls {
+		//fmt.Println("Using Mutual TLS")
+		pb.Mtls = *mtls
 	}
 	//fmt.Printf("Connecting to %s\n", *address)
 	connection, err := pb.NewConnection(*address)

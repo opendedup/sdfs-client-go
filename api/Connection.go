@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -34,8 +35,6 @@ const (
 	sdfsTempFolder = ".sdfsclitemp"
 )
 
-const slashSeparator = "/"
-
 var authtoken string
 var grpcAddress string
 var grpcSSL bool
@@ -43,19 +42,21 @@ var verbose bool
 
 //SdfsConnection is the connection info
 type SdfsConnection struct {
-	clnt  *grpc.ClientConn
-	vc    spb.VolumeServiceClient
-	fc    spb.FileIOServiceClient
-	evt   spb.SDFSEventServiceClient
-	token string
+	Clnt *grpc.ClientConn
+	vc   spb.VolumeServiceClient
+	fc   spb.FileIOServiceClient
+	evt  spb.SDFSEventServiceClient
 }
 
 // A Credentials Struct
 type Credentials struct {
 	ServerURL    string `yaml:"url" required:"true" envconfig:"SDFS_URL" default:"sdfss://localhost:6442"`
-	Password     string `yaml:"password" default:"" envconfig:"SDFS_PASSWORD" default:""`
+	Password     string `yaml:"password" envconfig:"SDFS_PASSWORD" default:""`
 	DisableTrust bool   `yaml:"disable_trust" envconfig:"SDFS_DISABLE_TRUST"`
-	set          bool
+	Mtls         bool   `yaml:"use_mtls" envconfig:"SDFS_USE_MTLS"`
+	MtlsCert     string `yaml:"cert" envconfig:"SDFS_MTLS_CERT" default:""`
+	Mtlskey      string `yaml:"key" envconfig:"SDFS_MTLS_KEY" default:""`
+	MtlsCACert   string `yaml:"cert" envconfig:"SDFS_MTLS_CA_CERT" default:""`
 }
 
 //UserName is a hardcoded UserName
@@ -66,6 +67,18 @@ var Password string
 
 //DisableTrust is a hardcoded DisableTrust
 var DisableTrust bool
+
+//Mtls sets the MutualTLS flag
+var Mtls bool
+
+//MtlsCert sets the path of the mtls cert used
+var MtlsCert string
+
+//MtlsKey sets the path of the mtls private key used
+var MtlsKey string
+
+//MtlsKey sets the path of the mtls ca used
+var MtlsCACert string
 
 //SdfsError is an SDFS Error with an error code mapped as a syscall error id
 type SdfsError struct {
@@ -137,7 +150,7 @@ func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grp
 
 //CloseConnection closes the grpc connection to the volume
 func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
-	return n.clnt.Close()
+	return n.Clnt.Close()
 }
 
 func authenicateUser(ctx context.Context) (token string, err error) {
@@ -148,7 +161,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 	}
 	var conn *grpc.ClientConn
 
-	if grpcSSL == true {
+	if grpcSSL {
 		config := &tls.Config{}
 		if creds.DisableTrust {
 			config = &tls.Config{
@@ -185,6 +198,32 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 	return token, err
 }
 
+func setCertPath(creds *Credentials) (err error) {
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	if len(creds.MtlsCert) == 0 {
+		creds.MtlsCert = user.HomeDir + "/.sdfs/client.crt"
+	}
+	if len(creds.Mtlskey) == 0 {
+		creds.Mtlskey = user.HomeDir + "/.sdfs/client.key"
+	}
+	if len(creds.MtlsCACert) == 0 {
+		creds.MtlsCACert = user.HomeDir + "/.sdfs/ca.crt"
+	}
+	if len(MtlsKey) > 0 {
+		creds.Mtlskey = MtlsKey
+	}
+	if len(MtlsCert) > 0 {
+		creds.MtlsCert = MtlsCert
+	}
+	if len(MtlsCACert) > 0 {
+		creds.MtlsCACert = MtlsCACert
+	}
+	return nil
+}
+
 func getCredentials(configPath string) (creds *Credentials, err error) {
 	if configPath == "" {
 		user, err := user.Current()
@@ -203,6 +242,13 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	}
 	_, err = os.Stat(configPath)
 	if os.IsNotExist(err) {
+		err := setCertPath(creds)
+		if err != nil {
+			return nil, err
+		}
+		if Mtls {
+			creds.Mtls = true
+		}
 		if DisableTrust {
 			creds.DisableTrust = true
 		}
@@ -229,6 +275,13 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	creds.ServerURL = strings.ToLower(creds.ServerURL)
 	if DisableTrust {
 		creds.DisableTrust = true
+	}
+	if Mtls {
+		creds.Mtls = true
+	}
+	err = setCertPath(creds)
+	if err != nil {
+		return nil, err
 	}
 
 	if !strings.HasPrefix(creds.ServerURL, "sdfs") {
@@ -260,22 +313,44 @@ func parseURL(url string) (string, string, bool, error) {
 	return address, commonPath, useSSL, nil
 }
 
-//AddTrustedCert adds a trusted Cert
-func AddTrustedCert(url string) error {
-	address, _, _, err := parseURL(url)
-	if err != nil {
-		return err
-	}
-	config := tls.Config{InsecureSkipVerify: true}
-	conn, err := tls.Dial("tcp", address, &config)
+/*
+func verifyPeerCerts(serverName string, rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	// some dummy code to check all certs available (not very useful and indeed a security issue if
+	// InsecureSkipVerify is set to true and the server supplies arbitrary certs)
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
 
-	if err != nil {
-		return err
+		if err != nil {
+			log.Println("Error: ", err)
+			continue
+		}
+
+		hash := sha1.Sum(rawCerts[i])
+		fmt.Printf("Fingerprint: %x\n\n", hash)
+
+		fmt.Println(hash, cert.DNSNames, cert.Subject, cert.VerifyHostname(serverName))
 	}
-	defer conn.Close()
+	return nil
+}
+*/
+
+func savePeerCerts(serverName string, rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	// some dummy code to check all certs available (not very useful and indeed a security issue if
+	// InsecureSkipVerify is set to true and the server supplies arbitrary certs)
 	var b bytes.Buffer
-	for _, cert := range conn.ConnectionState().PeerCertificates {
-		err := pem.Encode(&b, &pem.Block{
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
+
+		if err != nil {
+			log.Printf("Error: %v", err)
+			continue
+		}
+
+		hash := sha1.Sum(rawCerts[i])
+		log.Printf("Fingerprint: %x\n\n", hash)
+
+		log.Println(hash, cert.DNSNames, cert.Subject)
+		err = pem.Encode(&b, &pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert.Raw,
 		})
@@ -289,34 +364,44 @@ func AddTrustedCert(url string) error {
 	}
 	configPath := user.HomeDir + "/.sdfs/keys/"
 	os.MkdirAll(configPath, 0700)
-	fn := fmt.Sprintf("%s%s.pem", configPath, address)
+	fn := fmt.Sprintf("%s%s.pem", configPath, strings.ReplaceAll(serverName, ":", "_"))
 	err = ioutil.WriteFile(fn, b.Bytes(), 0600)
 	if err != nil {
 		return err
 	}
-	nb, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return err
-	}
-	block, _ := pem.Decode(nb)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return err
-	}
-	//fmt.Printf("cert=%v", cert)
+	log.Printf("wrote cert to %s", fn)
+	return nil
+}
 
-	certPool := x509.NewCertPool()
-	certPool.AddCert(cert)
-	nconfig := &tls.Config{
-		InsecureSkipVerify: false,
-		ServerName:         cert.Subject.CommonName,
-		RootCAs:            certPool,
+/*
+func tlsHost(targetAddr string) string {
+	if strings.LastIndex(targetAddr, ":") > strings.LastIndex(targetAddr, "]") {
+		targetAddr = targetAddr[:strings.LastIndex(targetAddr, ":")]
 	}
-	nconn, err := tls.Dial("tcp", address, nconfig)
+	return targetAddr
+}
+*/
+
+//AddTrustedCert adds a trusted Cert
+func AddTrustedCert(url string) error {
+	log.Println("adding cert")
+	address, _, _, err := parseURL(url)
 	if err != nil {
 		return err
 	}
-	nconn.Close()
+	config := tls.Config{
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			return savePeerCerts(address, rawCerts, verifiedChains)
+		},
+	}
+	conn, err := tls.Dial("tcp", address, &config)
+
+	if err != nil {
+		log.Printf("unable to connect to address : %v", err)
+		return err
+	}
+	defer conn.Close()
 	return nil
 }
 
@@ -327,7 +412,7 @@ func getCert(address string) (*x509.Certificate, error) {
 	}
 	configPath := user.HomeDir + "/.sdfs/keys/"
 
-	fn := fmt.Sprintf("%s%s.pem", configPath, address)
+	fn := fmt.Sprintf("%s%s.pem", configPath, strings.ReplaceAll(address, ":", "_"))
 	_, err = os.Stat(fn)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -347,7 +432,6 @@ func getCert(address string) (*x509.Certificate, error) {
 //NewConnection Created a new connectio given a path
 func NewConnection(path string) (*SdfsConnection, error) {
 	var address string
-	var commonPath string
 	var useSSL bool
 	u, err := xnet.ParseURL(path)
 	if err != nil {
@@ -359,8 +443,6 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	if u.Scheme == "sdfss" {
 		useSSL = true
 		grpcSSL = true
-	} else if commonPath == "" {
-		commonPath = u.Path
 	}
 	address = u.Host
 	grpcAddress = address
@@ -381,16 +463,13 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	defer cancel()
 	if useSSL {
 		config := &tls.Config{}
-		if creds.DisableTrust {
-			config = &tls.Config{
-				InsecureSkipVerify: true,
-			}
-		}
+
 		cert, err := getCert(address)
+		certPool := x509.NewCertPool()
 		if err != nil {
 			return nil, err
 		} else if cert != nil {
-			certPool := x509.NewCertPool()
+			log.Printf("found cert %s", cert.Subject.CommonName)
 			certPool.AddCert(cert)
 			config = &tls.Config{
 				InsecureSkipVerify: false,
@@ -398,8 +477,37 @@ func NewConnection(path string) (*SdfsConnection, error) {
 				RootCAs:            certPool,
 			}
 		}
+		if creds.DisableTrust {
+			config.InsecureSkipVerify = true
+		}
 
-		//fmt.Printf("TLS Connecting to %s  disable_trust=%t\n", address, creds.DisableTrust)
+		if creds.Mtls {
+			if len(creds.MtlsCACert) > 0 {
+				if config.RootCAs == nil {
+					config.RootCAs = x509.NewCertPool()
+				}
+				bs, err := ioutil.ReadFile(creds.MtlsCACert)
+				if err != nil {
+					log.Printf("unable to load cert %s : %v\n", creds.MtlsCACert, err)
+					return nil, fmt.Errorf("unable to load cert %s : %v", creds.MtlsCACert, err)
+				}
+				ok := config.RootCAs.AppendCertsFromPEM(bs)
+				if !ok {
+					log.Printf("failed to append cert %s", creds.MtlsCACert)
+					return nil, fmt.Errorf("failed to append cert %s", creds.MtlsCACert)
+				}
+				log.Printf("loaded cert %s", string(bs))
+
+			}
+			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+			if err != nil {
+				log.Printf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+				return nil, fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+			}
+			config.Certificates = []tls.Certificate{clientCert}
+		}
+
+		//fmt.Printf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 		if err != nil {
 			log.Printf("did not connect to %s : %v\n", path, err)
@@ -427,7 +535,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
-	return &SdfsConnection{clnt: conn, vc: vc, fc: fc, evt: evt}, nil
+	return &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt}, nil
 }
 
 //RmDir removes a given directory
