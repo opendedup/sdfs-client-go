@@ -94,12 +94,16 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	mtlsca := flagSet.String("root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
 	mtlskey := flagSet.String("mtls-key", "", "The path the private used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.key")
 	mtlscert := flagSet.String("mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
+	dedupe := flagSet.Bool("dedupe", false, "Enable Client Side Dedupe")
 	flagSet.Parse(os.Args[2:])
 
 	if *version {
 		fmt.Printf("Version : %s\n", Version)
 		fmt.Printf("Build Date: %s\n", BuildDate)
 		os.Exit(0)
+	}
+	if *dedupe {
+		pb.DedupeEnabled = true
 	}
 	if !IsFlagPassed("address", flagSet) {
 		address, err := getAddress()

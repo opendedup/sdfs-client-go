@@ -20,6 +20,7 @@ import (
 	uuid "github.com/google/uuid"
 	"github.com/kelseyhightower/envconfig"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -42,10 +43,11 @@ var verbose bool
 
 //SdfsConnection is the connection info
 type SdfsConnection struct {
-	Clnt *grpc.ClientConn
-	vc   spb.VolumeServiceClient
-	fc   spb.FileIOServiceClient
-	evt  spb.SDFSEventServiceClient
+	Clnt   *grpc.ClientConn
+	vc     spb.VolumeServiceClient
+	fc     spb.FileIOServiceClient
+	evt    spb.SDFSEventServiceClient
+	dedupe *dedupe.DedupeEngine
 }
 
 // A Credentials Struct
@@ -58,6 +60,8 @@ type Credentials struct {
 	Mtlskey      string `yaml:"key" envconfig:"SDFS_MTLS_KEY" default:""`
 	MtlsCACert   string `yaml:"cert" envconfig:"SDFS_MTLS_CA_CERT" default:""`
 }
+
+var DedupeEnabled bool
 
 //UserName is a hardcoded UserName
 var UserName string
@@ -535,7 +539,13 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
-	return &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt}, nil
+	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt}
+	if DedupeEnabled {
+		de := dedupe.NewDedupeEngine(ctx, conn, 4, 8)
+		sc.dedupe = de
+	}
+
+	return sc, nil
 }
 
 //RmDir removes a given directory
