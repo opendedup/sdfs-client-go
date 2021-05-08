@@ -1010,50 +1010,49 @@ func TestUpload(t *testing.T) {
 	connection.DeleteFile(ctx, fn)
 }
 
-/*
 func TestMain(m *testing.M) {
 
-		rand.Seed(time.Now().UTC().UnixNano())
-		cli, err := client.NewClientWithOpts(client.FromEnv)
-		if err != nil {
-			fmt.Printf("Unable to create docker client %v", err)
+	rand.Seed(time.Now().UTC().UnixNano())
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli.NegotiateAPIVersion(ctx)
+	containername := string(randBytesMaskImpr(16))
+	portopening := "6442"
+	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cmd := []string{}
+	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	api.DisableTrust = true
+	connection, err := api.NewConnection(address)
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address)
+		if retrys > 10 {
+			break
+		} else {
+			retrys++
 		}
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		cli.NegotiateAPIVersion(ctx)
-		containername := string(randBytesMaskImpr(16))
-		portopening := "6442"
-		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
-		cmd := []string{}
-		_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
-		if err != nil {
-			fmt.Printf("Unable to create docker client %v", err)
-		}
-		DisableTrust = true
-		connection, err := NewConnection(address)
-		retrys := 0
-		for err != nil {
-			log.Printf("retries = %d", retrys)
-			time.Sleep(20 * time.Second)
-			connection, err = NewConnection(address)
-			if retrys > 10 {
-				break
-			} else {
-				retrys++
-			}
-		}
-		if connection != nil {
-			connection.CloseConnection(ctx)
-		}
+	}
+	if connection != nil {
+		connection.CloseConnection(ctx)
+	}
 
-		if err != nil {
-			fmt.Printf("Unable to create connection %v", err)
-		}
-		code := m.Run()
-		stopAndRemoveContainer(cli, containername)
-		os.Exit(code)
+	if err != nil {
+		fmt.Printf("Unable to create connection %v", err)
+	}
+	code := m.Run()
+	stopAndRemoveContainer(cli, containername)
+	os.Exit(code)
 }
-*/
+
 func runContainer(client *client.Client, imagename string, containername string, hostPort, port string, inputEnv []string, cmd []string) (string, error) {
 	// Define a PORT opening
 	newport, err := natting.NewPort("tcp", port)
