@@ -634,12 +634,12 @@ func TestSetVolumeSize(t *testing.T) {
 }
 
 func connectN(t *testing.T, addr string, tries int) (*api.SdfsConnection, error) {
-	connection, err := api.NewConnection(addr)
+	connection, err := api.NewConnection(addr, false)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(10 * time.Second)
-		connection, err = api.NewConnection(addr)
+		connection, err = api.NewConnection(addr, false)
 		if retrys > tries {
 			break
 		} else {
@@ -764,12 +764,12 @@ func TestCloud(t *testing.T) {
 	assert.Nil(t, err)
 	address = "sdfss://localhost:6443"
 
-	connection, err := api.NewConnection(address)
+	connection, err := api.NewConnection(address, false)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address)
+		connection, err = api.NewConnection(address, false)
 		if retrys > 10 {
 			break
 		} else {
@@ -822,7 +822,7 @@ func cloudFileTest(t *testing.T) {
 	connection := connect(t, false)
 	assert.NotNil(t, connection)
 
-	nconnection, err := api.NewConnection("sdfss://localhost:6444")
+	nconnection, err := api.NewConnection("sdfss://localhost:6444", false)
 	assert.Nil(t, err)
 	defer nconnection.CloseConnection(ctx)
 	defer connection.CloseConnection(ctx)
@@ -954,13 +954,13 @@ func cleanStore(t *testing.T, dur int) {
 
 func TestCert(t *testing.T) {
 	api.DisableTrust = false
-	connection, err := api.NewConnection(address)
+	connection, err := api.NewConnection(address, false)
 	assert.NotNil(t, err)
 	assert.Nil(t, connection)
 	err = api.AddTrustedCert(address)
 	assert.Nil(t, err)
 	api.DisableTrust = false
-	connection, err = api.NewConnection(address)
+	connection, err = api.NewConnection(address, false)
 	assert.NotNil(t, connection)
 	assert.Nil(t, err)
 	user, err := user.Current()
@@ -1029,12 +1029,12 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Unable to create docker client %v", err)
 	}
 	api.DisableTrust = true
-	connection, err := api.NewConnection(address)
+	connection, err := api.NewConnection(address, false)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address)
+		connection, err = api.NewConnection(address, false)
 		if retrys > 10 {
 			break
 		} else {
@@ -1291,8 +1291,7 @@ func deleteFile(t *testing.T, fn string) {
 func connect(t *testing.T, dedupe bool) *api.SdfsConnection {
 	api.DisableTrust = true
 	api.Debug = true
-	api.DedupeEnabled = dedupe
-	connection, err := api.NewConnection(address)
+	connection, err := api.NewConnection(address, dedupe)
 
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)

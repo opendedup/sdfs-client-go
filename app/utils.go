@@ -102,9 +102,6 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 		fmt.Printf("Build Date: %s\n", BuildDate)
 		os.Exit(0)
 	}
-	if *dedupe {
-		pb.DedupeEnabled = true
-	}
 	if !IsFlagPassed("address", flagSet) {
 		address, err := getAddress()
 		if err != nil {
@@ -143,7 +140,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 		pb.Mtls = *mtls
 	}
 	//fmt.Printf("Connecting to %s\n", *address)
-	connection, err := pb.NewConnection(*address)
+	connection, err := pb.NewConnection(*address, *dedupe)
 	if err != nil {
 		fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
 		os.Exit(1)
