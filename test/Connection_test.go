@@ -1,4 +1,4 @@
-package api
+package test
 
 import (
 	"context"
@@ -17,12 +17,14 @@ import (
 	network "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	natting "github.com/docker/go-connections/nat"
+	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 )
 
 var address = "sdfss://localhost:6442"
+var imagename = "gcr.io/hybrics/hybrics:master"
 
 const (
 	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -53,7 +55,7 @@ func randBytesMaskImpr(n int) []byte {
 }
 
 func TestNewConnection(t *testing.T) {
-	connection := connect(t)
+	connection := connect(t, false)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer connection.CloseConnection(ctx)
 	defer cancel()
@@ -63,10 +65,10 @@ func TestNewConnection(t *testing.T) {
 func TestChow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
-	fn, _ := makeFile(t, "", 128)
+	fn, _ := makeFile(t, "", 128, false)
 	err := connection.Chown(ctx, fn, int32(100), int32(100))
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, fn)
@@ -79,10 +81,10 @@ func TestChow(t *testing.T) {
 func TestMkNod(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
-	fn, _ := makeFile(t, "", 128)
+	fn, _ := makeFile(t, "", 128, false)
 	exists, err := connection.FileExists(ctx, fn)
 	assert.Nil(t, err)
 	assert.True(t, exists)
@@ -92,7 +94,7 @@ func TestMkNod(t *testing.T) {
 func TestMkDir(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
 	err := connection.MkDir(ctx, "testdir", 511)
@@ -110,7 +112,7 @@ func TestMkDir(t *testing.T) {
 func TestMkDirAll(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
 	err := connection.MkDirAll(ctx, "testdir/t")
@@ -132,7 +134,7 @@ func TestMkDirAll(t *testing.T) {
 func TestListDir(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	dn := string(randBytesMaskImpr(16))
@@ -140,7 +142,7 @@ func TestListDir(t *testing.T) {
 	assert.Nil(t, err)
 	var files []string
 	for i := 0; i < 10; i++ {
-		fn, _ := makeFile(t, dn, 1024)
+		fn, _ := makeFile(t, dn, 1024, false)
 		files = append(files, fn)
 	}
 	_, list, err := connection.ListDir(ctx, dn, "", false, 20)
@@ -165,7 +167,7 @@ func TestCleanStore(t *testing.T) {
 func TestStatFS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	_, err := connection.StatFS(ctx)
@@ -175,10 +177,10 @@ func TestStatFS(t *testing.T) {
 func TestRename(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
 	nfn := string(randBytesMaskImpr(16))
 
 	err := connection.Rename(ctx, fn, nfn)
@@ -194,10 +196,10 @@ func TestRename(t *testing.T) {
 func TestCopyFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, hash := makeFile(t, "", 1024)
+	fn, hash := makeFile(t, "", 1024, false)
 	nfn := string(randBytesMaskImpr(16))
 	_, err := connection.CopyFile(ctx, fn, nfn, false)
 	assert.Nil(t, err)
@@ -212,10 +214,10 @@ func TestCopyFile(t *testing.T) {
 func TestEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, hash := makeFile(t, "", 1024)
+	fn, hash := makeFile(t, "", 1024, false)
 	nfn := string(randBytesMaskImpr(16))
 	evt, err := connection.CopyFile(ctx, fn, nfn, true)
 	assert.Nil(t, err)
@@ -236,10 +238,10 @@ func TestEvents(t *testing.T) {
 func TestXAttrs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
 	_, err := connection.GetXAttrSize(ctx, fn, "key")
 	assert.NotNil(t, err)
 	err = connection.SetXAttr(ctx, "key", "value", fn)
@@ -273,10 +275,10 @@ func TestXAttrs(t *testing.T) {
 func TestSetUtime(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
 	err := connection.Utime(ctx, fn, int64(0), int64(0))
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, fn)
@@ -290,10 +292,10 @@ func TestSetUtime(t *testing.T) {
 func TestTuncate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
 	err := connection.Truncate(ctx, fn, int64(0))
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, fn)
@@ -306,10 +308,10 @@ func TestTuncate(t *testing.T) {
 func TestSymLink(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
 	sfn := string(randBytesMaskImpr(16))
 	err := connection.SymLink(ctx, fn, sfn)
 	assert.Nil(t, err)
@@ -332,10 +334,10 @@ func TestSymLink(t *testing.T) {
 func TestSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
 	fh, err := connection.Open(ctx, fn, int32(-1))
 	assert.Nil(t, err)
 	b := randBytesMaskImpr(16)
@@ -352,7 +354,7 @@ func TestSync(t *testing.T) {
 func TestMaxAge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	info, err := connection.DSEInfo(ctx)
@@ -365,7 +367,7 @@ func TestMaxAge(t *testing.T) {
 	assert.Equal(t, int64(1000), info.MaxAge)
 	t.Logf("new max age : %d", info.MaxAge)
 	fsz := int64(1024 * 1024)
-	_nfn, _ := makeFile(t, "", fsz)
+	_nfn, _ := makeFile(t, "", fsz, false)
 	info, err = connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 
@@ -395,7 +397,7 @@ func TestMaxAge(t *testing.T) {
 	fnsz := info.CurrentSize
 	t.Logf("sz = %d nsz =%d, fnsz=%d", sz, nsz, fnsz)
 	assert.Greater(t, sz, fnsz)
-	_nfn, hs := makeFile(t, "", fsz)
+	_nfn, hs := makeFile(t, "", fsz, false)
 	nfn = string(randBytesMaskImpr(16))
 	time.Sleep(10 * time.Second)
 	connection.CopyFile(ctx, _nfn, nfn, false)
@@ -419,7 +421,7 @@ func TestMaxAge(t *testing.T) {
 	assert.Nil(t, err)
 	fnsz = info.CurrentSize
 	t.Logf("sz = %d, fnsz=%d", sz, fnsz)
-	_nfn, _ = makeFile(t, "", fsz)
+	_nfn, _ = makeFile(t, "", fsz, false)
 	nfn = string(randBytesMaskImpr(16))
 	time.Sleep(10 * time.Second)
 	_, err = connection.Download(ctx, _nfn, "/tmp/"+nfn)
@@ -467,11 +469,11 @@ func TestMaxAge(t *testing.T) {
 func TestCopyExtent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024)
-	sfn, _ := makeFile(t, "", 1024)
+	fn, _ := makeFile(t, "", 1024, false)
+	sfn, _ := makeFile(t, "", 1024, false)
 	fh, err := connection.Open(ctx, fn, int32(-1))
 	assert.Nil(t, err)
 	sfh, err := connection.Open(ctx, sfn, int32(-1))
@@ -509,7 +511,7 @@ func TestCopyExtent(t *testing.T) {
 func TestInfo(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	_, err := connection.GetVolumeInfo(ctx)
@@ -523,7 +525,7 @@ func TestInfo(t *testing.T) {
 func TestGCSchedule(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	gc, err := connection.GetGCSchedule(ctx)
@@ -536,7 +538,6 @@ func TestSetPassword(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli.NegotiateAPIVersion(ctx)
-	imagename := "gcr.io/hybrics/hybrics:3.11"
 	containername := string(randBytesMaskImpr(16))
 	portopening := "6442"
 	nport := "6443"
@@ -546,12 +547,12 @@ func TestSetPassword(t *testing.T) {
 	_, err := runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
 	defer stopAndRemoveContainer(cli, containername)
 	assert.Nil(t, err)
-	verbose = true
+	api.Verbose = true
 	addr := "sdfss://localhost:6443"
 	_, err = connectN(t, addr, 4)
 	assert.NotNil(t, err)
-	Password = "password123"
-	UserName = "admin"
+	api.Password = "password123"
+	api.UserName = "admin"
 	connection, err := connectN(t, addr, 0)
 	assert.Nil(t, err)
 	if err == nil {
@@ -560,21 +561,21 @@ func TestSetPassword(t *testing.T) {
 		err = connection.SetPassword(ctx, "password1234")
 		assert.Nil(t, err)
 		connection.CloseConnection(ctx)
-		Password = "password1234"
-		UserName = "admin"
-		ClearAuthToken()
+		api.Password = "password1234"
+		api.UserName = "admin"
+		api.ClearAuthToken()
 		connection, err = connectN(t, addr, 0)
 
 		if err == nil {
 			_, err = connection.GetVolumeInfo(ctx)
 			assert.Nil(t, err)
 			connection.CloseConnection(ctx)
-			ClearAuthToken()
+			api.ClearAuthToken()
 		} else {
 			assert.Nil(t, err)
 		}
-		Password = "password123"
-		UserName = "admin"
+		api.Password = "password123"
+		api.UserName = "admin"
 		connection, err = connectN(t, addr, 0)
 		if connection != nil {
 			connection.CloseConnection(ctx)
@@ -590,7 +591,7 @@ func TestSetPassword(t *testing.T) {
 func TestCache(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 
@@ -606,7 +607,7 @@ func TestCache(t *testing.T) {
 func TestSetRWSpeed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	err := connection.SetReadSpeed(ctx, int32(1000))
@@ -622,7 +623,7 @@ func TestSetRWSpeed(t *testing.T) {
 func TestSetVolumeSize(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	err := connection.SetVolumeCapacity(ctx, int64(100)*tb)
@@ -632,13 +633,13 @@ func TestSetVolumeSize(t *testing.T) {
 	assert.Equal(t, int64(100)*tb, vol.Capactity)
 }
 
-func connectN(t *testing.T, addr string, tries int) (*SdfsConnection, error) {
-	connection, err := NewConnection(addr)
+func connectN(t *testing.T, addr string, tries int) (*api.SdfsConnection, error) {
+	connection, err := api.NewConnection(addr)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(10 * time.Second)
-		connection, err = NewConnection(addr)
+		connection, err = api.NewConnection(addr)
 		if retrys > tries {
 			break
 		} else {
@@ -657,15 +658,14 @@ func TestCloudSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli.NegotiateAPIVersion(ctx)
-	imagename := "docker.io/minio/minio:latest"
+	mimagename := "docker.io/minio/minio:latest"
 	containername := "minio"
 	portopening := "9000"
 	bucket := string(randBytesMaskImpr(16))
 	inputEnv := []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")}
 	cmd := []string{"server", "/data"}
-	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+	_, err = runContainer(cli, mimagename, containername, portopening, portopening, inputEnv, cmd)
 	assert.Nil(t, err)
-	imagename = "gcr.io/hybrics/hybrics:3.11"
 	containername = string(randBytesMaskImpr(16))
 	portopening = "6442"
 	nport := "6443"
@@ -729,15 +729,15 @@ func TestCloud(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli.NegotiateAPIVersion(ctx)
-	imagename := "docker.io/minio/minio:latest"
+	mimagename := "docker.io/minio/minio:latest"
 	containername := "minio"
 	portopening := "9000"
 	bucket := string(randBytesMaskImpr(16))
 	inputEnv := []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")}
 	cmd := []string{"server", "/data"}
-	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+	_, err = runContainer(cli, mimagename, containername, portopening, portopening, inputEnv, cmd)
 	assert.Nil(t, err)
-	imagename = "gcr.io/hybrics/hybrics:3.11"
+
 	containername = string(randBytesMaskImpr(16))
 	portopening = "6442"
 	nport := "6443"
@@ -764,12 +764,12 @@ func TestCloud(t *testing.T) {
 	assert.Nil(t, err)
 	address = "sdfss://localhost:6443"
 
-	connection, err := NewConnection(address)
+	connection, err := api.NewConnection(address)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = NewConnection(address)
+		connection, err = api.NewConnection(address)
 		if retrys > 10 {
 			break
 		} else {
@@ -808,7 +808,7 @@ func TestCloud(t *testing.T) {
 func cloudInfoTest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	info, err := connection.GetConnectedVolumes(ctx)
@@ -819,14 +819,14 @@ func cloudInfoTest(t *testing.T) {
 func cloudFileTest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 
-	nconnection, err := NewConnection("sdfss://localhost:6444")
+	nconnection, err := api.NewConnection("sdfss://localhost:6444")
 	assert.Nil(t, err)
 	defer nconnection.CloseConnection(ctx)
 	defer connection.CloseConnection(ctx)
-	fn, hs := makeFile(t, "", int64(1024))
+	fn, hs := makeFile(t, "", int64(1024), false)
 	stat, err := connection.Stat(ctx, fn)
 	assert.Nil(t, err)
 	_, err = nconnection.GetCloudFile(ctx, fn, fn, true, true)
@@ -843,7 +843,7 @@ func cloudFileTest(t *testing.T) {
 
 	err = connection.MkDir(ctx, "testdir", 511)
 	assert.Nil(t, err)
-	fn, hs = makeFile(t, "testdir", 1024)
+	fn, hs = makeFile(t, "testdir", 1024, false)
 	_, err = nconnection.GetCloudFile(ctx, fn, fn, true, true)
 	assert.Nil(t, err)
 	stat, err = connection.Stat(ctx, fn)
@@ -862,7 +862,7 @@ func cloudFileTest(t *testing.T) {
 	_, err = nconnection.GetAttr(ctx, fn)
 	assert.NotNil(t, err)
 	//Check Garbage Collection
-	fn, hs = makeFile(t, "", int64(1024))
+	fn, hs = makeFile(t, "", int64(1024), false)
 	stat, err = connection.Stat(ctx, fn)
 	assert.Nil(t, err)
 	_, err = nconnection.GetCloudFile(ctx, fn, fn, true, true)
@@ -878,7 +878,7 @@ func cloudFileTest(t *testing.T) {
 	err = nconnection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
 	//Test get metadata
-	fn, hs = makeFile(t, "", int64(1024))
+	fn, hs = makeFile(t, "", int64(1024), false)
 	stat, err = connection.Stat(ctx, fn)
 	assert.Nil(t, err)
 	_, err = nconnection.GetCloudMetaFile(ctx, fn, fn, true, true)
@@ -894,7 +894,7 @@ func cloudFileTest(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func readGenericFile(ctx context.Context, t *testing.T, fn string, connection *SdfsConnection) []byte {
+func readGenericFile(ctx context.Context, t *testing.T, fn string, connection *api.SdfsConnection) []byte {
 	fh, err := connection.Open(ctx, fn, 0)
 	assert.Nil(t, err)
 	stat, err := connection.Stat(ctx, fn)
@@ -924,15 +924,15 @@ func readGenericFile(ctx context.Context, t *testing.T, fn string, connection *S
 func cleanStore(t *testing.T, dur int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	var files []string
 	for i := 0; i < 10; i++ {
-		fn, _ := makeFile(t, "", 1024*1024)
+		fn, _ := makeFile(t, "", 1024*1024, false)
 		files = append(files, fn)
 	}
-	_nfn, nh := makeFile(t, "", 1024*1024)
+	_nfn, nh := makeFile(t, "", 1024*1024, false)
 	info, err := connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	sz := info.CurrentSize
@@ -953,20 +953,20 @@ func cleanStore(t *testing.T, dur int) {
 }
 
 func TestCert(t *testing.T) {
-	DisableTrust = false
-	connection, err := NewConnection(address)
+	api.DisableTrust = false
+	connection, err := api.NewConnection(address)
 	assert.NotNil(t, err)
 	assert.Nil(t, connection)
-	err = AddTrustedCert(address)
+	err = api.AddTrustedCert(address)
 	assert.Nil(t, err)
-	DisableTrust = false
-	connection, err = NewConnection(address)
+	api.DisableTrust = false
+	connection, err = api.NewConnection(address)
 	assert.NotNil(t, connection)
 	assert.Nil(t, err)
 	user, err := user.Current()
 	assert.Nil(t, err)
 	configPath := user.HomeDir + "/.sdfs/keys/"
-	addr, _, _, _ := parseURL(address)
+	addr, _, _, _ := api.ParseURL(address)
 	fn := fmt.Sprintf("%s%s.pem", configPath, addr)
 	err = os.Remove(fn)
 
@@ -977,7 +977,7 @@ func TestCert(t *testing.T) {
 func TestUpload(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	fn := string(randBytesMaskImpr(16))
@@ -1010,48 +1010,50 @@ func TestUpload(t *testing.T) {
 	connection.DeleteFile(ctx, fn)
 }
 
+/*
 func TestMain(m *testing.M) {
-	rand.Seed(time.Now().UTC().UnixNano())
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		fmt.Printf("Unable to create docker client %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli.NegotiateAPIVersion(ctx)
-	imagename := "gcr.io/hybrics/hybrics:3.11"
-	containername := string(randBytesMaskImpr(16))
-	portopening := "6442"
-	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
-	cmd := []string{}
-	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
-	if err != nil {
-		fmt.Printf("Unable to create docker client %v", err)
-	}
-	DisableTrust = true
-	connection, err := NewConnection(address)
-	retrys := 0
-	for err != nil {
-		log.Printf("retries = %d", retrys)
-		time.Sleep(20 * time.Second)
-		connection, err = NewConnection(address)
-		if retrys > 10 {
-			break
-		} else {
-			retrys++
-		}
-	}
-	if connection != nil {
-		connection.CloseConnection(ctx)
-	}
 
-	if err != nil {
-		fmt.Printf("Unable to create connection %v", err)
-	}
-	code := m.Run()
-	stopAndRemoveContainer(cli, containername)
-	os.Exit(code)
+		rand.Seed(time.Now().UTC().UnixNano())
+		cli, err := client.NewClientWithOpts(client.FromEnv)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cli.NegotiateAPIVersion(ctx)
+		containername := string(randBytesMaskImpr(16))
+		portopening := "6442"
+		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+		cmd := []string{}
+		_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		DisableTrust = true
+		connection, err := NewConnection(address)
+		retrys := 0
+		for err != nil {
+			log.Printf("retries = %d", retrys)
+			time.Sleep(20 * time.Second)
+			connection, err = NewConnection(address)
+			if retrys > 10 {
+				break
+			} else {
+				retrys++
+			}
+		}
+		if connection != nil {
+			connection.CloseConnection(ctx)
+		}
+
+		if err != nil {
+			fmt.Printf("Unable to create connection %v", err)
+		}
+		code := m.Run()
+		stopAndRemoveContainer(cli, containername)
+		os.Exit(code)
 }
+*/
 func runContainer(client *client.Client, imagename string, containername string, hostPort, port string, inputEnv []string, cmd []string) (string, error) {
 	// Define a PORT opening
 	newport, err := natting.NewPort("tcp", port)
@@ -1123,7 +1125,11 @@ func runContainer(client *client.Client, imagename string, containername string,
 	}
 
 	// Run the actual container
-	client.ContainerStart(context.Background(), cont.ID, types.ContainerStartOptions{})
+	err = client.ContainerStart(context.Background(), cont.ID, types.ContainerStartOptions{})
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
 	log.Printf("Container %s is created", cont.ID)
 
 	return cont.ID, nil
@@ -1149,16 +1155,25 @@ func stopAndRemoveContainer(client *client.Client, containername string) error {
 	return nil
 }
 
-func makeFile(t *testing.T, parent string, size int64) (string, []byte) {
+func makeFile(t *testing.T, parent string, size int64, dedupe bool) (string, []byte) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, dedupe)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
 	return makeGenericFile(ctx, t, connection, parent, size)
 }
 
-func makeGenericFile(ctx context.Context, t *testing.T, connection *SdfsConnection, parent string, size int64) (string, []byte) {
+func makeLargeBlockFile(t *testing.T, parent string, size int64, dedupe bool, blocksize int) (string, []byte) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, dedupe)
+	defer connection.CloseConnection(ctx)
+	assert.NotNil(t, connection)
+	return makeLargeBlockGenericFile(ctx, t, connection, parent, size, blocksize)
+}
+
+func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64) (string, []byte) {
 	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
 	err := connection.MkNod(ctx, fn, 511, 0)
 	assert.Nil(t, err)
@@ -1189,10 +1204,41 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *SdfsConnecti
 	return fn, h.Sum(nil)
 }
 
+func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64, blocksize int) (string, []byte) {
+	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
+	err := connection.MkNod(ctx, fn, 511, 0)
+	assert.Nil(t, err)
+	stat, err := connection.GetAttr(ctx, fn)
+	assert.Nil(t, err)
+	assert.Equal(t, stat.Mode, int32(511))
+	fh, err := connection.Open(ctx, fn, 0)
+	assert.Nil(t, err)
+	maxoffset := size
+	offset := int64(0)
+	h, err := blake2b.New(32, make([]byte, 0))
+	assert.Nil(t, err)
+	blockSz := 1024 * blocksize
+	for offset < maxoffset {
+		if blockSz > int(maxoffset-offset) {
+			blockSz = int(maxoffset - offset)
+		}
+		b := randBytesMaskImpr(blockSz)
+		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
+		h.Write(b)
+		assert.Nil(t, err)
+		offset += int64(len(b))
+		b = nil
+	}
+	stat, _ = connection.GetAttr(ctx, fn)
+	assert.Equal(t, stat.Size, maxoffset)
+	_ = connection.Release(ctx, fh)
+	return fn, h.Sum(nil)
+}
+
 func readFile(t *testing.T, filenm string, delete bool) []byte {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	stat, err := connection.GetAttr(ctx, filenm)
 	assert.Nil(t, err)
@@ -1234,7 +1280,7 @@ func readFile(t *testing.T, filenm string, delete bool) []byte {
 func deleteFile(t *testing.T, fn string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t)
+	connection := connect(t, false)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
 	err := connection.DeleteFile(ctx, fn)
@@ -1243,9 +1289,11 @@ func deleteFile(t *testing.T, fn string) {
 	assert.NotNil(t, err)
 }
 
-func connect(t *testing.T) *SdfsConnection {
-	DisableTrust = true
-	connection, err := NewConnection(address)
+func connect(t *testing.T, dedupe bool) *api.SdfsConnection {
+	api.DisableTrust = true
+	api.Debug = true
+	api.DedupeEnabled = dedupe
+	connection, err := api.NewConnection(address)
 
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)

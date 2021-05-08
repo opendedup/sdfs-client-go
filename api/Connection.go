@@ -39,7 +39,8 @@ const (
 var authtoken string
 var grpcAddress string
 var grpcSSL bool
-var verbose bool
+var Verbose bool
+var Debug bool
 
 //SdfsConnection is the connection info
 type SdfsConnection struct {
@@ -117,19 +118,19 @@ func clientInterceptor(
 			authtoken = token
 			_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
 			err = invoker(_ctx, method, req, reply, cc, opts...)
-			if verbose {
+			if Verbose {
 				log.Printf("unauthenticated status code %s for method %s", status.Code(err), method)
 			}
 			return err
 
 		}
-		if verbose && err != nil {
+		if Verbose && err != nil {
 			log.Printf("authenticated status code %s for method %s", status.Code(err), method)
 		}
 		return err
 	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	if verbose {
+	if Verbose {
 		log.Printf("status code %s for method %s", status.Code(err), method)
 	}
 	return err
@@ -192,7 +193,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 		return token, &SdfsError{Err: auth.GetError(), ErrorCode: auth.GetErrorCode()}
 	}
 	token = auth.GetToken()
-	if verbose {
+	if Verbose {
 		log.Printf("found token %s", token)
 	}
 	err = conn.Close()
@@ -298,7 +299,7 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 
 }
 
-func parseURL(url string) (string, string, bool, error) {
+func ParseURL(url string) (string, string, bool, error) {
 	u, err := xnet.ParseURL(url)
 	if err != nil {
 		return "", "", false, err
@@ -389,7 +390,7 @@ func tlsHost(targetAddr string) string {
 //AddTrustedCert adds a trusted Cert
 func AddTrustedCert(url string) error {
 	log.Println("adding cert")
-	address, _, _, err := parseURL(url)
+	address, _, _, err := ParseURL(url)
 	if err != nil {
 		return err
 	}
@@ -541,7 +542,11 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	evt := spb.NewSDFSEventServiceClient(conn)
 	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt}
 	if DedupeEnabled {
-		de := dedupe.NewDedupeEngine(ctx, conn, 4, 8)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug)
+		if err != nil {
+			log.Printf("error initializing dedupe connection: %v\n", err)
+			return nil, err
+		}
 		sc.dedupe = de
 	}
 
@@ -589,6 +594,9 @@ func (n *SdfsConnection) MkDirAll(ctx context.Context, path string) error {
 
 //Stat gets a specific file info
 func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoResponse, error) {
+	if DedupeEnabled {
+		n.dedupe.SyncFile(path)
+	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: path})
 	if err != nil {
 		log.Print(err)
@@ -877,6 +885,9 @@ func (n *SdfsConnection) ReadLink(ctx context.Context, path string) (linkpath st
 
 //GetAttr returns Stat for a given file
 func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.Stat, err error) {
+	if DedupeEnabled {
+		n.dedupe.SyncFile(path)
+	}
 	fi, err := n.fc.GetAttr(ctx, &spb.StatRequest{Path: path})
 	if err != nil {
 		log.Print(err)
@@ -889,6 +900,9 @@ func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.St
 
 //Flush flushes the requested file to underlying storage
 func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err error) {
+	if DedupeEnabled {
+		n.dedupe.Sync(fh)
+	}
 	fi, err := n.fc.Flush(ctx, &spb.FlushRequest{Path: path, Fd: fh})
 	if err != nil {
 		log.Print(err)
@@ -937,18 +951,26 @@ func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
 
 //Write writes data to a given filehandle
 func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
-	fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
-	if err != nil {
-		log.Print(err)
-		return err
-	} else if fi.GetErrorCode() > 0 {
-		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+
+	if DedupeEnabled {
+		return n.dedupe.Write(fh, offset, data, length)
+	} else {
+		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
+		if err != nil {
+			log.Print(err)
+			return err
+		} else if fi.GetErrorCode() > 0 {
+			return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		}
+		return nil
 	}
-	return nil
 }
 
 //Read reads data from a given filehandle
 func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, length int32) (data []byte, err error) {
+	if DedupeEnabled {
+		n.dedupe.Sync(fh)
+	}
 	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: fh, Start: offset, Len: length})
 	if err != nil {
 		log.Print(err)
@@ -961,6 +983,9 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 
 //Release closes a given filehandle
 func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
+	if DedupeEnabled {
+		n.dedupe.Close(fh)
+	}
 	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
 	if err != nil {
 		log.Print(err)
@@ -968,6 +993,7 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 	} else if fi.GetErrorCode() > 0 {
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
+
 	return nil
 }
 
@@ -991,6 +1017,9 @@ func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh
 		return fh, err
 	} else if fi.GetErrorCode() > 0 {
 		return fh, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	if DedupeEnabled {
+		n.dedupe.Open(path, fi.FileHandle)
 	}
 	return fi.FileHandle, nil
 }
