@@ -48,7 +48,7 @@ type SdfsConnection struct {
 	vc     spb.VolumeServiceClient
 	fc     spb.FileIOServiceClient
 	evt    spb.SDFSEventServiceClient
-	dedupe *dedupe.DedupeEngine
+	Dedupe *dedupe.DedupeEngine
 }
 
 // A Credentials Struct
@@ -62,6 +62,7 @@ type Credentials struct {
 	MtlsCACert   string `yaml:"cert" envconfig:"SDFS_MTLS_CA_CERT" default:""`
 }
 
+//DedupeEnabled Sets whether client side deduplication is enabled for this instance
 var DedupeEnabled bool
 
 //UserName is a hardcoded UserName
@@ -547,7 +548,7 @@ func NewConnection(path string) (*SdfsConnection, error) {
 			log.Printf("error initializing dedupe connection: %v\n", err)
 			return nil, err
 		}
-		sc.dedupe = de
+		sc.Dedupe = de
 	}
 
 	return sc, nil
@@ -595,7 +596,7 @@ func (n *SdfsConnection) MkDirAll(ctx context.Context, path string) error {
 //Stat gets a specific file info
 func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoResponse, error) {
 	if DedupeEnabled {
-		n.dedupe.SyncFile(path)
+		n.Dedupe.SyncFile(path)
 	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: path})
 	if err != nil {
@@ -886,7 +887,7 @@ func (n *SdfsConnection) ReadLink(ctx context.Context, path string) (linkpath st
 //GetAttr returns Stat for a given file
 func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.Stat, err error) {
 	if DedupeEnabled {
-		n.dedupe.SyncFile(path)
+		n.Dedupe.SyncFile(path)
 	}
 	fi, err := n.fc.GetAttr(ctx, &spb.StatRequest{Path: path})
 	if err != nil {
@@ -901,7 +902,7 @@ func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.St
 //Flush flushes the requested file to underlying storage
 func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err error) {
 	if DedupeEnabled {
-		n.dedupe.Sync(fh)
+		n.Dedupe.Sync(fh)
 	}
 	fi, err := n.fc.Flush(ctx, &spb.FlushRequest{Path: path, Fd: fh})
 	if err != nil {
@@ -953,7 +954,7 @@ func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
 func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
 
 	if DedupeEnabled {
-		return n.dedupe.Write(fh, offset, data, length)
+		return n.Dedupe.Write(fh, offset, data, length)
 	} else {
 		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
 		if err != nil {
@@ -969,7 +970,7 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 //Read reads data from a given filehandle
 func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, length int32) (data []byte, err error) {
 	if DedupeEnabled {
-		n.dedupe.Sync(fh)
+		n.Dedupe.Sync(fh)
 	}
 	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: fh, Start: offset, Len: length})
 	if err != nil {
@@ -984,7 +985,7 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 //Release closes a given filehandle
 func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 	if DedupeEnabled {
-		n.dedupe.Close(fh)
+		n.Dedupe.Close(fh)
 	}
 	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
 	if err != nil {
@@ -1019,7 +1020,7 @@ func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh
 		return fh, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	if DedupeEnabled {
-		n.dedupe.Open(path, fi.FileHandle)
+		n.Dedupe.Open(path, fi.FileHandle)
 	}
 	return fi.FileHandle, nil
 }
