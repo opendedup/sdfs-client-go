@@ -622,6 +622,9 @@ func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compa
 
 //DeleteFile removes a given file
 func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
+	if DedupeEnabled {
+		n.Dedupe.CloseFile(path)
+	}
 	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: path})
 	if err != nil {
 		log.Print(err)
@@ -634,6 +637,10 @@ func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 
 //CopyExtent creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcStart, dstStart, len int64) (written int64, err error) {
+	if DedupeEnabled {
+		n.Dedupe.SyncFile(src)
+		n.Dedupe.SyncFile(dst)
+	}
 	fi, err := n.fc.CopyExtent(ctx, &spb.CopyExtentRequest{SrcFile: src, DstFile: dst, SrcStart: srcStart, DstStart: dstStart, Length: len})
 	if err != nil {
 		log.Print(err)
@@ -658,6 +665,10 @@ func (n *SdfsConnection) StatFS(ctx context.Context) (stat *spb.StatFS, err erro
 
 //Rename renames a file
 func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error) {
+	if DedupeEnabled {
+		n.Dedupe.CloseFile(src)
+		n.Dedupe.CloseFile(dst)
+	}
 	fi, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: src, Dest: dst})
 	if err != nil {
 		log.Print(err)
@@ -670,6 +681,10 @@ func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error
 
 //CopyFile creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnImmediately bool) (event *spb.SDFSEvent, err error) {
+	if DedupeEnabled {
+		n.Dedupe.SyncFile(src)
+		n.Dedupe.SyncFile(dst)
+	}
 	fi, err := n.fc.CreateCopy(ctx, &spb.FileSnapshotRequest{
 		Src:  src,
 		Dest: dst,
@@ -850,6 +865,9 @@ func (n *SdfsConnection) Utime(ctx context.Context, path string, atime, mtime in
 
 //Truncate truncates a given file to a given length in bytes
 func (n *SdfsConnection) Truncate(ctx context.Context, path string, length int64) (err error) {
+	if DedupeEnabled {
+		n.Dedupe.SyncFile(path)
+	}
 	fi, err := n.fc.Truncate(ctx, &spb.TruncateRequest{Path: path, Length: length})
 	if err != nil {
 		log.Print(err)

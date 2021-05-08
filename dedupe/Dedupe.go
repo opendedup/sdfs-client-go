@@ -197,6 +197,23 @@ func (n *DedupeEngine) Close(fileHandle int64) {
 	}
 }
 
+func (n *DedupeEngine) CloseFile(fileName string) {
+	n.SyncFile(fileName)
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	file, ok := n.openFiles[fileName]
+	if ok {
+		file.mu.Lock()
+		defer file.mu.Unlock()
+		for k, _ := range file.fileHandles {
+			delete(n.fileHandles, k)
+		}
+		delete(n.openFiles, file.fileName)
+
+	}
+
+}
+
 func (n *DedupeEngine) SyncFile(fileName string) {
 	n.mu.Lock()
 	file, ok := n.openFiles[fileName]
