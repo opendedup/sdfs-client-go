@@ -957,6 +957,9 @@ func (n *SdfsConnection) Chmod(ctx context.Context, path string, mode int32) (er
 
 //Unlink deletes the given file
 func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.CloseFile(path)
+	}
 	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: path})
 	if err != nil {
 		log.Print(err)
@@ -1318,7 +1321,6 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
-	var fh int64
 	n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: sdfsTempFolder})
 	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{Path: tmpname})
 	if err != nil {
@@ -1326,14 +1328,11 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	} else if mkf.GetErrorCode() > 0 {
 		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
 	}
-	fhr, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: tmpname})
+	fh, err := n.Open(ctx, tmpname, -1)
 	if err != nil {
 		return -1, err
-	} else if fhr.GetErrorCode() > 0 {
-		return -1, &SdfsError{Err: fhr.GetError(), ErrorCode: fhr.GetErrorCode()}
 	}
-	defer n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: tmpname})
-	fh = fhr.GetFileHandle()
+	defer n.Unlink(ctx, tmpname)
 	b1 := make([]byte, 128*1024)
 	var offset int64 = 0
 	var n1 int = 0
@@ -1346,33 +1345,27 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	n1, err = r.Read(b1)
 	s := make([]byte, n1)
 	copy(s, b1)
-	fwr, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: s, Start: offset, Len: int32(n1)})
+	err = n.Write(ctx, fh, s, offset, int32(n1))
 	offset += int64(n1)
 	if err != nil {
-		n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+		n.Release(ctx, fh)
 		return -1, err
-	} else if fwr.GetErrorCode() > 0 {
-		n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
-		return -1, &SdfsError{Err: fwr.GetError(), ErrorCode: fwr.GetErrorCode()}
 	}
 	for n1 > 0 {
 		n1, err = r.Read(b1)
 		if n1 > 0 {
 			s = make([]byte, n1)
 			copy(s, b1)
-			fwr, err = n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: s, Start: offset, Len: int32(n1)})
+			err = n.Write(ctx, fh, s, offset, int32(n1))
 			offset += int64(n1)
 			if err != nil {
-				n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+				n.Release(ctx, fh)
 				return -1, err
-			} else if fwr.GetErrorCode() > 0 {
-				n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
-				return -1, &SdfsError{Err: fwr.GetError(), ErrorCode: fwr.GetErrorCode()}
 			}
 		}
 	}
 
-	n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+	n.Release(ctx, fh)
 	dir := path.Dir(dst)
 	if dir != "" {
 		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: dir})
@@ -1382,28 +1375,26 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 			return -1, &SdfsError{Err: mkd.GetError(), ErrorCode: mkd.GetErrorCode()}
 		}
 	}
-	n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: dst})
+	n.Unlink(ctx, dst)
 
-	sp, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: tmpname, Dest: dst})
+	err = n.Rename(ctx, tmpname, dst)
 	if err != nil {
 		return -1, err
-	} else if sp.GetErrorCode() > 0 {
-		return -1, &SdfsError{Err: sp.GetError(), ErrorCode: sp.GetErrorCode()}
 	}
 
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: dst})
+	fi, err := n.Stat(ctx, dst)
 	if err != nil {
 		return -1, err
-	} else if fi.GetErrorCode() > 0 {
-		return -1, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 
-	return fi.GetResponse()[0].GetSize(), nil
+	return fi.GetSize(), nil
 }
 
 //Download downloads a file from SDFS locally
 func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesread int64, err error) {
-
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(src)
+	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: src})
 	if err != nil {
 		return -1, err
