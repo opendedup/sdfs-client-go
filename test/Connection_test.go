@@ -25,6 +25,7 @@ import (
 
 var address = "sdfss://localhost:6442"
 var imagename = "gcr.io/hybrics/hybrics:master"
+var password = "password123"
 
 const (
 	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -542,7 +543,7 @@ func TestSetPassword(t *testing.T) {
 	portopening := "6442"
 	nport := "6443"
 	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
-		fmt.Sprintf("PASSWORD=%s", "password123"), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
+		fmt.Sprintf("PASSWORD=%s", password), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
 	cmd := []string{}
 	_, err := runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
 	defer stopAndRemoveContainer(cli, containername)
@@ -703,7 +704,7 @@ func TestCloudSync(t *testing.T) {
 	cinfo, err := daddr.GetConnectedVolumes(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(cinfo))
-	fn, sh := makeGenericFile(ctx, t, saddr, "", 1024)
+	fn, sh, _ := makeGenericFile(ctx, t, saddr, "", 1024)
 	fi, err := saddr.Stat(ctx, fn)
 	assert.Nil(t, err)
 	_, err = daddr.SyncFromCloudVolume(ctx, info.SerialNumber, true)
@@ -713,7 +714,7 @@ func TestCloudSync(t *testing.T) {
 	dh := readGenericFile(ctx, t, fn, daddr)
 	assert.Equal(t, dh, sh)
 	assert.Equal(t, fi.Mode, nfi.Mode)
-	fn, _ = makeGenericFile(ctx, t, saddr, "", 1024)
+	fn, _, _ = makeGenericFile(ctx, t, saddr, "", 1024)
 	_, err = saddr.Stat(ctx, fn)
 	assert.Nil(t, err)
 	_, err = daddr.SyncCloudVolume(ctx, true)
@@ -1022,13 +1023,16 @@ func TestMain(m *testing.M) {
 	cli.NegotiateAPIVersion(ctx)
 	containername := string(randBytesMaskImpr(16))
 	portopening := "6442"
-	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
+		fmt.Sprintf("PASSWORD=%s", password), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
 	cmd := []string{}
 	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
 	if err != nil {
 		fmt.Printf("Unable to create docker client %v", err)
 	}
 	api.DisableTrust = true
+	api.Password = password
+	api.UserName = "admin"
 	connection, err := api.NewConnection(address, false)
 	retrys := 0
 	for err != nil {
@@ -1160,7 +1164,8 @@ func makeFile(t *testing.T, parent string, size int64, dedupe bool) (string, []b
 	connection := connect(t, dedupe)
 	defer connection.CloseConnection(ctx)
 	assert.NotNil(t, connection)
-	return makeGenericFile(ctx, t, connection, parent, size)
+	b, bo, _ := makeGenericFile(ctx, t, connection, parent, size)
+	return b, bo
 }
 
 func makeLargeBlockFile(t *testing.T, parent string, size int64, dedupe bool, blocksize int) (string, []byte) {
@@ -1172,19 +1177,73 @@ func makeLargeBlockFile(t *testing.T, parent string, size int64, dedupe bool, bl
 	return makeLargeBlockGenericFile(ctx, t, connection, parent, size, blocksize)
 }
 
-func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64) (string, []byte) {
+func makeGenericFileNt(ctx context.Context, connection *api.SdfsConnection, parent string, size int64) (string, []byte, error) {
+	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
+	err := connection.MkNod(ctx, fn, 511, 0)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	_, err = connection.GetAttr(ctx, fn)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	fh, err := connection.Open(ctx, fn, 0)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	maxoffset := size
+	offset := int64(0)
+	h, err := blake2b.New(32, make([]byte, 0))
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	blockSz := 1024 * 32
+	for offset < maxoffset {
+		if blockSz > int(maxoffset-offset) {
+			blockSz = int(maxoffset - offset)
+		}
+		b := randBytesMaskImpr(blockSz)
+		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
+		h.Write(b)
+		if err != nil {
+			return "", make([]byte, 0), err
+		}
+		offset += int64(len(b))
+		b = nil
+	}
+	_, err = connection.GetAttr(ctx, fn)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	_ = connection.Release(ctx, fh)
+	return fn, h.Sum(nil), nil
+}
+
+func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64) (string, []byte, error) {
 	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
 	err := connection.MkNod(ctx, fn, 511, 0)
 	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
 	stat, err := connection.GetAttr(ctx, fn)
 	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
 	assert.Equal(t, stat.Mode, int32(511))
 	fh, err := connection.Open(ctx, fn, 0)
 	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
 	maxoffset := size
 	offset := int64(0)
 	h, err := blake2b.New(32, make([]byte, 0))
 	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
 	blockSz := 1024 * 32
 	for offset < maxoffset {
 		if blockSz > int(maxoffset-offset) {
@@ -1194,13 +1253,19 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConn
 		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
 		h.Write(b)
 		assert.Nil(t, err)
+		if err != nil {
+			return "", make([]byte, 0), err
+		}
 		offset += int64(len(b))
 		b = nil
 	}
-	stat, _ = connection.GetAttr(ctx, fn)
+	stat, err = connection.GetAttr(ctx, fn)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
 	assert.Equal(t, stat.Size, maxoffset)
 	_ = connection.Release(ctx, fh)
-	return fn, h.Sum(nil)
+	return fn, h.Sum(nil), nil
 }
 
 func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64, blocksize int) (string, []byte) {

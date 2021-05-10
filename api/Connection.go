@@ -156,12 +156,12 @@ func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grp
 
 //CloseConnection closes the grpc connection to the volume
 func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
+	authtoken = ""
 	return n.Clnt.Close()
 }
 
 func authenicateUser(ctx context.Context) (token string, err error) {
 	creds, err := getCredentials("")
-
 	if err != nil {
 		return token, err
 	}
@@ -537,11 +537,13 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	}
 
 	vc := spb.NewVolumeServiceClient(conn)
-	_, err = vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
-	if err != nil {
-		log.Printf("did not execute gc command: %v\n", err)
-		return nil, err
-	}
+	/*
+		_, err = vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
+		if err != nil {
+			log.Printf("did not execute gc command: %v\n", err)
+			return nil, err
+		}
+	*/
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 	uc := spb.NewSdfsUserServiceClient(conn)

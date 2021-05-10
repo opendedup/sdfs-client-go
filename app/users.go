@@ -29,7 +29,7 @@ func UserCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	description := flagSet.String("description", "", "A description for the user")
 	flagSet.Var(&myFlags, "permission", "A permssion to set for this user. This can be called multiple times."+
 		" Possible permssions are  METADATA_READ,METADATA_WRITE,FILE_READ,FILE_WRITE,FILE_DELETE,VOLUME_READ,CONFIG_READ,"+
-		"CONFIG_WRITE,EVENT_READ,AUTH_READ,AUTH_WRITE")
+		"CONFIG_WRITE,EVENT_READ,AUTH_READ,AUTH_WRITE,ADMIN")
 	add := flagSet.String("add", "", "add a user")
 	del := flagSet.String("delete", "", "delete a user")
 	perms := flagSet.String("set-permissions", "", "set permissions for a user")
