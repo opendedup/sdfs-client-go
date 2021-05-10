@@ -149,6 +149,22 @@ func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grp
 	// Calls the invoker to execute RPC
 	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 	s, err := streamer(_ctx, desc, cc, method, opts...)
+	if status.Code(err) == codes.Unauthenticated {
+		n.token, err = n.authenicateUser()
+		if err != nil {
+			return nil, err
+		}
+		_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
+		s, err := streamer(_ctx, desc, cc, method, opts...)
+		if Verbose {
+			log.Printf("unauthenticated status code %s for method %s", status.Code(err), method)
+		}
+		return s, err
+
+	}
+	if Verbose && err != nil {
+		log.Printf("authenticated status code %s for method %s", status.Code(err), method)
+	}
 	if err != nil {
 		return nil, err
 	}
