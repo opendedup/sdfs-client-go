@@ -111,6 +111,9 @@ func clientInterceptor(
 	if method != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
 		err := invoker(_ctx, method, req, reply, cc, opts...)
+		if err != nil {
+			log.Printf("error %v", err)
+		}
 		if status.Code(err) == codes.Unauthenticated {
 			token, err := authenicateUser(ctx)
 			if err != nil {
