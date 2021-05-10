@@ -48,6 +48,7 @@ type SdfsConnection struct {
 	vc            spb.VolumeServiceClient
 	fc            spb.FileIOServiceClient
 	evt           spb.SDFSEventServiceClient
+	us            spb.SdfsUserServiceClient
 	Dedupe        *dedupe.DedupeEngine
 	DedupeEnabled bool
 }
@@ -56,6 +57,7 @@ type SdfsConnection struct {
 type Credentials struct {
 	ServerURL    string `yaml:"url" required:"true" envconfig:"SDFS_URL" default:"sdfss://localhost:6442"`
 	Password     string `yaml:"password" envconfig:"SDFS_PASSWORD" default:""`
+	Username     string `yaml:"username" envconfig:"SDFS_USERNAME" default:"admin"`
 	DisableTrust bool   `yaml:"disable_trust" envconfig:"SDFS_DISABLE_TRUST"`
 	Mtls         bool   `yaml:"use_mtls" envconfig:"SDFS_USE_MTLS"`
 	MtlsCert     string `yaml:"cert" envconfig:"SDFS_MTLS_CERT" default:""`
@@ -183,7 +185,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 		return token, fmt.Errorf("unable to initialize sdfsClient")
 	}
 	vc := spb.NewVolumeServiceClient(conn)
-	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: "admin", Password: creds.Password})
+	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: creds.Username, Password: creds.Password})
 	if err != nil {
 		log.Printf("did not connect: %v", err)
 		return token, err
@@ -259,6 +261,9 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 
 		if len(Password) > 0 {
 			creds.Password = Password
+		}
+		if len(UserName) > 0 {
+			creds.Username = UserName
 		}
 		return creds, nil
 	}
@@ -539,7 +544,8 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	}
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
-	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled}
+	uc := spb.NewSdfsUserServiceClient(conn)
+	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc}
 	if dedupeEnabled {
 		log.Printf("Initializing Dedupe Engine\n")
 		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug)
@@ -1439,4 +1445,108 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 	}
 
 	return read, nil
+}
+
+func parsePermissions(permissions []string) *spb.SdfsPermissions {
+	perms := &spb.SdfsPermissions{}
+	for _, s := range permissions {
+		if s == "ADMIN" {
+			perms.ADMIN = true
+		}
+		if s == "METADATA_READ" {
+			perms.METADATA_READ = true
+		}
+		if s == "METADATA_WRITE" {
+			perms.METADATA_WRITE = true
+		}
+		if s == "FILE_READ" {
+			perms.FILE_READ = true
+		}
+		if s == "FILE_WRITE" {
+			perms.FILE_WRITE = true
+		}
+		if s == "FILE_DELETE" {
+			perms.FILE_DELETE = true
+		}
+		if s == "VOLUME_READ" {
+			perms.VOLUME_READ = true
+		}
+		if s == "CONFIG_READ" {
+			perms.CONFIG_READ = true
+		}
+		if s == "CONFIG_WRITE" {
+			perms.CONFIG_WRITE = true
+		}
+		if s == "EVENT_READ" {
+			perms.EVENT_READ = true
+		}
+		if s == "AUTH_READ" {
+			perms.AUTH_READ = true
+		}
+		if s == "AUTH_WRITE" {
+			perms.AUTH_WRITE = true
+		}
+	}
+	return perms
+}
+
+func (n *SdfsConnection) AddUser(ctx context.Context, user, password, description string, permissions []string) error {
+
+	fi, err := n.us.AddUser(ctx, &spb.AddUserRequest{Permissions: parsePermissions(permissions), User: user, Password: password, Description: description})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) ListUsers(ctx context.Context) ([]*spb.SdfsUser, error) {
+
+	fi, err := n.us.ListUsers(ctx, &spb.ListUsersRequest{})
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	} else if fi.GetErrorCode() > 0 {
+		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+
+	return fi.Users, nil
+}
+
+func (n *SdfsConnection) SetSdfsPassword(ctx context.Context, user, password string) error {
+
+	fi, err := n.us.SetSdfsPassword(ctx, &spb.SetUserPasswordRequest{User: user, Password: password})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) SetSdfsPermissions(ctx context.Context, user string, permissions []string) error {
+
+	fi, err := n.us.SetSdfsPermissions(ctx, &spb.SetPermissionsRequest{Permissions: parsePermissions(permissions), User: user})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) DeleteUser(ctx context.Context, user string) error {
+
+	fi, err := n.us.DeleteUser(ctx, &spb.DeleteUserRequest{User: user})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
 }

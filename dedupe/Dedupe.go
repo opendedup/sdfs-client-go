@@ -284,7 +284,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 		log.Error(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
-		log.Errorf("error checking hashes error : %s , error code: %s", fi.Error, fi.ErrorCode)
+		log.Errorf("error writing chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	for i := 0; i < len(fi.InsertRecords); i++ {

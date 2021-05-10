@@ -84,7 +84,8 @@ func IsFlagPassed(name string, flagset *flag.FlagSet) bool {
 
 //ParseAndConnect Parse Arguents and Connect to Volume
 func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
-	pwd := flagSet.String("pwd", "Password", "The Password for the Volume")
+	pwd := flagSet.String("p", "Password", "The Password for the Volume")
+	u := flagSet.String("u", "admin", "The user to authenticate for this operation")
 	address := flagSet.String("address", "sdfss://localhost:6442", "The Password for the Volume")
 	disableTrust := flagSet.Bool("trust-all", false, "Trust Self Signed TLS Certs")
 	version := flagSet.Bool("version", false, "Get the version number")
@@ -126,8 +127,8 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 		pb.MtlsCert = *mtlscert
 	}
 
-	if IsFlagPassed("pwd", flagSet) {
-		pb.UserName = "admin"
+	if IsFlagPassed("p", flagSet) {
+		pb.UserName = *u
 		pb.Password = *pwd
 
 	}
