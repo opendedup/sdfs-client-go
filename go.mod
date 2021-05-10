@@ -10,7 +10,6 @@ require (
 	github.com/docker/docker v20.10.5+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/docker/go-units v0.4.0 // indirect
-	github.com/go-errors/errors v1.1.1 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -23,7 +22,6 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
-	github.com/square/certstrap v1.2.0 // indirect
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	google.golang.org/grpc v1.36.1
