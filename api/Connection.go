@@ -112,9 +112,10 @@ func clientInterceptor(
 		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
 		err := invoker(_ctx, method, req, reply, cc, opts...)
 		if err != nil {
-			log.Printf("error %v", err)
+			log.Printf("auth error %v %d=%d", err, status.Code(err), codes.Unauthenticated)
 		}
 		if status.Code(err) == codes.Unauthenticated {
+			log.Printf("ssssss")
 			token, err := authenicateUser(ctx)
 			if err != nil {
 				return err
