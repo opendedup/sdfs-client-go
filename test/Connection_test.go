@@ -550,11 +550,15 @@ func TestSetPassword(t *testing.T) {
 	assert.Nil(t, err)
 	api.Verbose = true
 	addr := "sdfss://localhost:6443"
-	_, err = connectN(t, addr, 4)
+	api.Password = ""
+	api.UserName = "admin"
+	connection, _ := connectN(t, addr, 4)
+	_, err = connection.DSEInfo(ctx)
 	assert.NotNil(t, err)
 	api.Password = "password123"
 	api.UserName = "admin"
-	connection, err := connectN(t, addr, 0)
+	connection, _ = connectN(t, addr, 0)
+	_, err = connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	if err == nil {
 		_, err = connection.GetVolumeInfo(ctx)
@@ -564,20 +568,21 @@ func TestSetPassword(t *testing.T) {
 		connection.CloseConnection(ctx)
 		api.Password = "password1234"
 		api.UserName = "admin"
-		api.ClearAuthToken()
+
 		connection, err = connectN(t, addr, 0)
 
 		if err == nil {
 			_, err = connection.GetVolumeInfo(ctx)
 			assert.Nil(t, err)
 			connection.CloseConnection(ctx)
-			api.ClearAuthToken()
 		} else {
 			assert.Nil(t, err)
 		}
 		api.Password = "password123"
 		api.UserName = "admin"
-		connection, err = connectN(t, addr, 0)
+		connection, _ = connectN(t, addr, 0)
+		_, err = connection.DSEInfo(ctx)
+		assert.NotNil(t, err)
 		if connection != nil {
 			connection.CloseConnection(ctx)
 		}

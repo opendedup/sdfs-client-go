@@ -36,21 +36,19 @@ const (
 	sdfsTempFolder = ".sdfsclitemp"
 )
 
-var authtoken string
-var grpcAddress string
-var grpcSSL bool
 var Verbose bool
 var Debug bool
 
 //SdfsConnection is the connection info
 type SdfsConnection struct {
-	Clnt          *grpc.ClientConn
-	vc            spb.VolumeServiceClient
-	fc            spb.FileIOServiceClient
-	evt           spb.SDFSEventServiceClient
-	us            spb.SdfsUserServiceClient
-	Dedupe        *dedupe.DedupeEngine
-	DedupeEnabled bool
+	Clnt            *grpc.ClientConn
+	vc              spb.VolumeServiceClient
+	fc              spb.FileIOServiceClient
+	evt             spb.SDFSEventServiceClient
+	us              spb.SdfsUserServiceClient
+	Dedupe          *dedupe.DedupeEngine
+	DedupeEnabled   bool
+	SdfsInterceptor *SdfsInterceptor
 }
 
 // A Credentials Struct
@@ -96,7 +94,14 @@ func (e *SdfsError) Error() string {
 	return fmt.Sprintf("SDFS Error %s %s", e.Err, e.ErrorCode)
 }
 
-func clientInterceptor(
+type SdfsInterceptor struct {
+	address     string
+	credentials *Credentials
+	grpcSSL     bool
+	token       string
+}
+
+func (n *SdfsInterceptor) clientInterceptor(
 
 	ctx context.Context,
 	method string,
@@ -109,19 +114,14 @@ func clientInterceptor(
 	// Logic before invoking the invoker
 	// Calls the invoker to execute RPC
 	if method != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
-		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
+		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 		err := invoker(_ctx, method, req, reply, cc, opts...)
-		if err != nil {
-			log.Printf("auth error %v %d=%d", err, status.Code(err), codes.Unauthenticated)
-		}
 		if status.Code(err) == codes.Unauthenticated {
-			log.Printf("ssssss")
-			token, err := authenicateUser(ctx)
+			n.token, err = n.authenicateUser()
 			if err != nil {
 				return err
 			}
-			authtoken = token
-			_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
+			_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 			err = invoker(_ctx, method, req, reply, cc, opts...)
 			if Verbose {
 				log.Printf("unauthenticated status code %s for method %s", status.Code(err), method)
@@ -144,10 +144,10 @@ func clientInterceptor(
 
 }
 
-func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// Logic before invoking the invoker
 	// Calls the invoker to execute RPC
-	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
+	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 	s, err := streamer(_ctx, desc, cc, method, opts...)
 	if err != nil {
 		return nil, err
@@ -160,36 +160,80 @@ func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grp
 
 //CloseConnection closes the grpc connection to the volume
 func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
-	authtoken = ""
 	return n.Clnt.Close()
 }
 
-func authenicateUser(ctx context.Context) (token string, err error) {
+func (n *SdfsInterceptor) authenicateUser() (token string, err error) {
+	_ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	defer cancel()
 	creds, err := getCredentials("")
 	if err != nil {
 		return token, err
 	}
 	var conn *grpc.ClientConn
 
-	if grpcSSL {
+	if n.grpcSSL {
 		config := &tls.Config{}
-		if creds.DisableTrust {
+
+		cert, err := getCert(n.credentials.ServerURL)
+		certPool := x509.NewCertPool()
+		if err != nil {
+			return "", err
+		} else if cert != nil {
+			log.Printf("found cert %s", cert.Subject.CommonName)
+			certPool.AddCert(cert)
 			config = &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: false,
+				ServerName:         cert.Subject.CommonName,
+				RootCAs:            certPool,
 			}
 		}
-		conn, err = grpc.Dial(grpcAddress, grpc.WithBlock(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		if creds.DisableTrust {
+			config.InsecureSkipVerify = true
+		}
+
+		if creds.Mtls {
+			if len(creds.MtlsCACert) > 0 {
+				if config.RootCAs == nil {
+					config.RootCAs = x509.NewCertPool()
+				}
+				bs, err := ioutil.ReadFile(creds.MtlsCACert)
+				if err != nil {
+					log.Printf("unable to load cert %s : %v\n", creds.MtlsCACert, err)
+					return "", fmt.Errorf("unable to load cert %s : %v", creds.MtlsCACert, err)
+				}
+				ok := config.RootCAs.AppendCertsFromPEM(bs)
+				if !ok {
+					log.Printf("failed to append cert %s", creds.MtlsCACert)
+					return "", fmt.Errorf("failed to append cert %s", creds.MtlsCACert)
+				}
+
+			}
+			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+			if err != nil {
+				log.Printf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+				return "", fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+			}
+			config.Certificates = []tls.Certificate{clientCert}
+		}
+		conn, err = grpc.Dial(n.address, grpc.WithBlock(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		if err != nil {
+			log.Printf("did not connect: %v", err)
+			return token, fmt.Errorf("unable to initialize sdfsClient")
+		}
 
 	} else {
-		conn, err = grpc.Dial(grpcAddress, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err = grpc.Dial(n.address, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Printf("did not connect: %v", err)
+			return token, fmt.Errorf("unable to initialize sdfsClient")
+		}
 	}
 
-	if err != nil {
-		log.Printf("did not connect: %v", err)
-		return token, fmt.Errorf("unable to initialize sdfsClient")
-	}
 	vc := spb.NewVolumeServiceClient(conn)
-	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: creds.Username, Password: creds.Password})
+
+	defer cancel()
+	auth, err := vc.AuthenticateUser(_ctx, &spb.AuthenticationRequest{Username: creds.Username, Password: creds.Password})
 	if err != nil {
 		log.Printf("did not connect: %v", err)
 		return token, err
@@ -455,10 +499,8 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	}
 	if u.Scheme == "sdfss" {
 		useSSL = true
-		grpcSSL = true
 	}
 	address = u.Host
-	grpcAddress = address
 
 	var conn *grpc.ClientConn
 	_, err = user.Current()
@@ -473,6 +515,7 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	var interceptor *SdfsInterceptor
 	defer cancel()
 	if useSSL {
 		config := &tls.Config{}
@@ -519,16 +562,18 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 			}
 			config.Certificates = []tls.Certificate{clientCert}
 		}
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
 		//fmt.Printf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 		if err != nil {
 			log.Printf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
 		}
 	} else {
 		//fmt.Printf("Connecting to %s \n", address)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor))
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
+		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 	}
 	//fmt.Print("BLA")
 
@@ -551,7 +596,7 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 	uc := spb.NewSdfsUserServiceClient(conn)
-	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc}
+	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc, SdfsInterceptor: interceptor}
 	if dedupeEnabled {
 		log.Printf("Initializing Dedupe Engine\n")
 		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug)
@@ -602,6 +647,10 @@ func (n *SdfsConnection) MkDirAll(ctx context.Context, path string) error {
 	} else {
 		return nil
 	}
+}
+
+func (n *SdfsConnection) ClearCreds() {
+	n.SdfsInterceptor.token = ""
 }
 
 //Stat gets a specific file info
@@ -1148,11 +1197,6 @@ func (n *SdfsConnection) CleanStore(ctx context.Context, compact, waitForComplet
 		return n.WaitForEvent(ctx, eventid)
 	}
 	return n.GetEvent(ctx, eventid)
-}
-
-//Clear AuthToken will remove the current auth token to authenticate to the client
-func ClearAuthToken() {
-	authtoken = ""
 }
 
 //DeleteCloudVolume deletes a volume that is no longer in use
