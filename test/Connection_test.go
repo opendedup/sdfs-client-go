@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"os/user"
+	"runtime"
 
 	"fmt"
 	"io/ioutil"
@@ -1020,20 +1021,24 @@ func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		fmt.Printf("Unable to create docker client %v", err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli.NegotiateAPIVersion(ctx)
 	containername := string(randBytesMaskImpr(16))
-	portopening := "6442"
-	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
-		fmt.Sprintf("PASSWORD=%s", password), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
-	cmd := []string{}
-	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
-	if err != nil {
-		fmt.Printf("Unable to create docker client %v", err)
+	if runtime.GOOS != "windows" {
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+
+		cli.NegotiateAPIVersion(ctx)
+
+		portopening := "6442"
+		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
+			fmt.Sprintf("PASSWORD=%s", password), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
+		cmd := []string{}
+		_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
 	}
 	api.DisableTrust = true
 	api.Password = password
@@ -1058,7 +1063,9 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Unable to create connection %v", err)
 	}
 	code := m.Run()
-	stopAndRemoveContainer(cli, containername)
+	if runtime.GOOS != "windows" {
+		stopAndRemoveContainer(cli, containername)
+	}
 	os.Exit(code)
 }
 
