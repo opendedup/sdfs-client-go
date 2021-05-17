@@ -32,6 +32,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	value := flagSet.String("value", "value", "The Attribute Value")
 	fio := flagSet.String("io", ".", "Returns File Dedupe Rates and other IO Attributes")
 	connection := ParseAndConnect(flagSet)
+	defer connection.CloseConnection(ctx)
 	if IsFlagPassed("mkdir", flagSet) {
 		err := connection.MkDirAll(ctx, *mkdir)
 		if err != nil {
@@ -216,7 +217,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				table.Append([]string{"File Open", fmt.Sprintf("%t", v.Open)})
 				table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
 				table.Append([]string{"Symlink Path", v.SymlinkPath})
-				table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
+				table.Append([]string{"File Type", v.Type.String()})
 
 			} else {
 				table.Append([]string{"Size", strconv.FormatInt(v.Size, 10)})
@@ -233,8 +234,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				table.Append([]string{"Group ID", fmt.Sprintf("%d", v.GroupId)})
 				table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
 				table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
-				table.Append([]string{"Symlink Path", fmt.Sprintf("%s", v.SymlinkPath)})
-				table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
+				table.Append([]string{"Symlink Path", v.SymlinkPath})
+				table.Append([]string{"File Type", v.Type.String()})
 			}
 			table.SetAlignment(tablewriter.ALIGN_LEFT)
 
@@ -280,8 +281,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 					table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
 					table.Append([]string{"File Open", fmt.Sprintf("%t", v.Open)})
 					table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
-					table.Append([]string{"Symlink Path", fmt.Sprintf("%s", v.SymlinkPath)})
-					table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
+					table.Append([]string{"Symlink Path", v.SymlinkPath})
+					table.Append([]string{"File Type", v.Type.String()})
 
 				} else {
 					table.Append([]string{"Size", strconv.FormatInt(v.Size, 10)})
@@ -299,9 +300,9 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 					table.Append([]string{"User ID", fmt.Sprintf("%d", v.UserId)})
 					table.Append([]string{"Symlink", fmt.Sprintf("%t", v.Symlink)})
 					table.Append([]string{"Symlink Path", v.SymlinkPath})
-					table.Append([]string{"File Type", fmt.Sprintf("%s", v.Type)})
+					table.Append([]string{"File Type", v.Type.String()})
 				}
-				table.Append([]string{"Event Type", fmt.Sprintf("%s", fInfo.Action)})
+				table.Append([]string{"Event Type", fInfo.Action.String()})
 				table.SetAlignment(tablewriter.ALIGN_LEFT)
 
 				table.Render()

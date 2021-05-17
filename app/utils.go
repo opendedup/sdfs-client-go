@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"syscall"
-
 	pb "github.com/opendedup/sdfs-client-go/api"
 )
 
@@ -86,12 +84,18 @@ func IsFlagPassed(name string, flagset *flag.FlagSet) bool {
 
 //ParseAndConnect Parse Arguents and Connect to Volume
 func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
-	pwd := flagSet.String("pwd", "Password", "The Password for the Volume")
+	pwd := flagSet.String("p", "Password", "The Password for the Volume")
+	u := flagSet.String("u", "admin", "The user to authenticate for this operation")
 	address := flagSet.String("address", "sdfss://localhost:6442", "The Password for the Volume")
 	disableTrust := flagSet.Bool("trust-all", false, "Trust Self Signed TLS Certs")
 	version := flagSet.Bool("version", false, "Get the version number")
 	trustCert := flagSet.Bool("trust-cert", false, "Trust the certificate for url specified. This will download and store the certificate in $HOME/.sdfs/keys")
-
+	mtls := flagSet.Bool("mtls", false, "Use Mutual TLS. This will use the certs located in $HOME/.sdfs/keys/[client.crt,client.key,ca.crt]"+
+		"unless otherwise specified")
+	mtlsca := flagSet.String("root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
+	mtlskey := flagSet.String("mtls-key", "", "The path the private used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.key")
+	mtlscert := flagSet.String("mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
+	dedupe := flagSet.Bool("dedupe", false, "Enable Client Side Dedupe")
 	flagSet.Parse(os.Args[2:])
 
 	if *version {
@@ -113,18 +117,31 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 			os.Exit(1)
 		}
 	}
+	if IsFlagPassed("root-ca", flagSet) {
+		pb.MtlsCACert = *mtlsca
+	}
+	if IsFlagPassed("mtls-key", flagSet) {
+		pb.MtlsKey = *mtlskey
+	}
+	if IsFlagPassed("mtls-cert", flagSet) {
+		pb.MtlsCert = *mtlscert
+	}
 
-	if IsFlagPassed("pwd", flagSet) {
-		pb.UserName = "admin"
+	if IsFlagPassed("p", flagSet) {
+		pb.UserName = *u
 		pb.Password = *pwd
 
 	}
 	if *disableTrust {
-		fmt.Println("TLS Verification Disabled")
+		//fmt.Println("TLS Verification Disabled")
 		pb.DisableTrust = *disableTrust
 	}
+	if *mtls {
+		//fmt.Println("Using Mutual TLS")
+		pb.Mtls = *mtls
+	}
 	//fmt.Printf("Connecting to %s\n", *address)
-	connection, err := pb.NewConnection(*address)
+	connection, err := pb.NewConnection(*address, *dedupe)
 	if err != nil {
 		fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
 		os.Exit(1)
@@ -182,28 +199,9 @@ func getAddress() (url *string, err error) {
 	return url, nil
 }
 
-//GetPermissions returns permissions in a format SDFS can understand
 func GetPermissions(src string) (uid, gid int32, perm int, err error) {
-	info, _ := os.Stat(src)
-
-	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		uid = int32(stat.Uid)
-		gid = int32(stat.Gid)
-		b := strconv.FormatInt(int64(stat.Mode), 8)
-
-		runeSample := []rune(b)
-		l := len(runeSample)
-		b = string(runeSample[l-3 : l])
-		perm, err = strconv.Atoi(b)
-		if err != nil {
-			return -1, -1, -1, err
-		}
-	} else {
-		// we are not in linux, this won't work anyway in windows,
-		// but maybe you want to log warnings
-		uid = int32(os.Getuid())
-		gid = int32(os.Getgid())
-		perm = 644
-	}
+	uid = int32(0)
+	gid = int32(0)
+	perm = 644
 	return uid, gid, perm, nil
 }

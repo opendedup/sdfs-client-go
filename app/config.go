@@ -31,8 +31,9 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	ccv := flagSet.Bool("connected-volumes", false, "Returns A list of volumes that are using the same storage")
 	levents := flagSet.Bool("events-list", false, "List Events")
 	connection := ParseAndConnect(flagSet)
+	defer connection.CloseConnection(ctx)
 
-	if *cleanstore == true {
+	if *cleanstore {
 
 		evt, err := connection.CleanStore(ctx, true, true)
 		if err != nil {
@@ -42,14 +43,14 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Garbage Collection Finished %s \n", evt.ShortMsg)
 		return
 	}
-	if *shutdown == true {
+	if *shutdown {
 
 		connection.ShutdownVolume(ctx)
 		fmt.Println("Shutting Down Volume")
 		return
 
 	}
-	if *scv == true {
+	if *scv {
 
 		evt, err := connection.SyncCloudVolume(ctx, true)
 		if err != nil {
@@ -140,7 +141,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Println("Password Set")
 		return
 	}
-	if *gcsecd == true {
+	if *gcsecd {
 		cvo, err := connection.GetGCSchedule(ctx)
 		if err != nil {
 			fmt.Printf("Unable to get GC schedule error: %v\n", err)
@@ -149,7 +150,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("GC Schedule is: %s\n", cvo)
 		return
 	}
-	if *ccv == true {
+	if *ccv {
 		cvo, err := connection.GetConnectedVolumes(ctx)
 		if err != nil {
 			fmt.Printf("Unable to list connected volumes error: %v\n", err)
@@ -175,7 +176,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Render()
 		return
 	}
-	if *sinfo == true {
+	if *sinfo {
 		svo, err := connection.SystemInfo(ctx)
 		if err != nil {
 			fmt.Printf("Unable to get system info error: %v\n", err)
@@ -197,7 +198,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Render()
 		return
 	}
-	if *levents == true {
+	if *levents {
 		elist, err := connection.ListEvents(ctx)
 		if err != nil {
 			fmt.Printf("Unable to list events error: %v\n", err)
@@ -226,7 +227,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		return
 
 	}
-	if *vinfo == true {
+	if *vinfo {
 		volumeInfo, err := connection.GetVolumeInfo(ctx)
 		if err != nil {
 			fmt.Printf("Unable to get volume info error: %v\n", err)
@@ -270,7 +271,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Render()
 		return
 	}
-	if *dinfo == true {
+	if *dinfo {
 		dInfo, err := connection.DSEInfo(ctx)
 		if err != nil {
 			fmt.Printf("Unable to get volume info error: %v\n", err)
