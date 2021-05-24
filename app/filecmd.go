@@ -91,7 +91,6 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			os.Exit(1)
 		}
 		if IsFlagPassed("preserve", flagSet) {
-
 			UID, GID, CHMOD, err := GetPermissions(*src)
 			if err != nil {
 				fmt.Printf("Unable to get permissions: %s error: %v\n", *src, err)
