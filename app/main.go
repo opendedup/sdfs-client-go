@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+var Version = "development"
+var BuildDate = "NAN"
+
 func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -14,6 +17,8 @@ func main() {
 	configCmd := flag.NewFlagSet("config", flag.ExitOnError)
 	fileCmd := flag.NewFlagSet("file", flag.ExitOnError)
 	cloudCmd := flag.NewFlagSet("cloud", flag.ExitOnError)
+	userCmd := flag.NewFlagSet("user", flag.ExitOnError)
+
 	/*
 		flag.Parse()
 		if len(os.Args) == 1 {
@@ -24,7 +29,7 @@ func main() {
 		}
 	*/
 	if len(os.Args) == 1 {
-		fmt.Println("expected 'config','file', or 'cloud' subcommands")
+		fmt.Println("expected 'config','file','user', or 'cloud' subcommands")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -34,8 +39,10 @@ func main() {
 		FileCmd(ctx, fileCmd)
 	case "cloud":
 		CloudCmd(ctx, cloudCmd)
+	case "user":
+		UserCmd(ctx, userCmd)
 	default:
-		fmt.Println("expected 'config','file', or 'cloud' subcommands")
+		fmt.Println("expected 'config','file','user', or 'cloud' subcommands")
 		os.Exit(1)
 
 	}

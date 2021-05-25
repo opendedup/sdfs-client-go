@@ -5,6 +5,8 @@ GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 
 VERSION ?= $(shell git describe --tags)
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+HASH := $(shell git rev-parse HEAD)
 TAG ?= "sdfs/sdfscli:$(VERSION)"
 
 all: build
@@ -38,7 +40,10 @@ lint:
 build:
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
-	@go build -o ./build/sdfscli app/* 
+	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli app/*
+	@mv app/utils_linux.go .
+	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli.exe app/*
+	@mv utils_linux.go app/
 
 # Builds sdfscli and installs it to $GOPATH/bin.
 install: build

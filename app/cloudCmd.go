@@ -16,8 +16,9 @@ func CloudCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	dest := flagSet.String("destination", "", "The relative path for destination of the downloaded file")
 	overwrite := flagSet.Bool("overwrite", false, "Overwrite the destination file if it exists")
 	connection := ParseAndConnect(flagSet)
+	defer connection.CloseConnection(ctx)
 
-	if *scv == true {
+	if *scv {
 
 		evt, err := connection.SyncCloudVolume(ctx, true)
 		if err != nil {

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -19,6 +20,7 @@ import (
 	uuid "github.com/google/uuid"
 	"github.com/kelseyhightower/envconfig"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -34,28 +36,31 @@ const (
 	sdfsTempFolder = ".sdfsclitemp"
 )
 
-const slashSeparator = "/"
-
-var authtoken string
-var grpcAddress string
-var grpcSSL bool
-var verbose bool
+var Verbose bool
+var Debug bool
 
 //SdfsConnection is the connection info
 type SdfsConnection struct {
-	clnt  *grpc.ClientConn
-	vc    spb.VolumeServiceClient
-	fc    spb.FileIOServiceClient
-	evt   spb.SDFSEventServiceClient
-	token string
+	Clnt            *grpc.ClientConn
+	vc              spb.VolumeServiceClient
+	fc              spb.FileIOServiceClient
+	evt             spb.SDFSEventServiceClient
+	us              spb.SdfsUserServiceClient
+	Dedupe          *dedupe.DedupeEngine
+	DedupeEnabled   bool
+	SdfsInterceptor *SdfsInterceptor
 }
 
 // A Credentials Struct
 type Credentials struct {
 	ServerURL    string `yaml:"url" required:"true" envconfig:"SDFS_URL" default:"sdfss://localhost:6442"`
-	Password     string `yaml:"password" default:"" envconfig:"SDFS_PASSWORD" default:""`
+	Password     string `yaml:"password" envconfig:"SDFS_PASSWORD" default:""`
+	Username     string `yaml:"username" envconfig:"SDFS_USERNAME" default:"admin"`
 	DisableTrust bool   `yaml:"disable_trust" envconfig:"SDFS_DISABLE_TRUST"`
-	set          bool
+	Mtls         bool   `yaml:"use_mtls" envconfig:"SDFS_USE_MTLS"`
+	MtlsCert     string `yaml:"cert" envconfig:"SDFS_MTLS_CERT" default:""`
+	Mtlskey      string `yaml:"key" envconfig:"SDFS_MTLS_KEY" default:""`
+	MtlsCACert   string `yaml:"cert" envconfig:"SDFS_MTLS_CA_CERT" default:""`
 }
 
 //UserName is a hardcoded UserName
@@ -67,6 +72,18 @@ var Password string
 //DisableTrust is a hardcoded DisableTrust
 var DisableTrust bool
 
+//Mtls sets the MutualTLS flag
+var Mtls bool
+
+//MtlsCert sets the path of the mtls cert used
+var MtlsCert string
+
+//MtlsKey sets the path of the mtls private key used
+var MtlsKey string
+
+//MtlsKey sets the path of the mtls ca used
+var MtlsCACert string
+
 //SdfsError is an SDFS Error with an error code mapped as a syscall error id
 type SdfsError struct {
 	Err       string
@@ -77,7 +94,14 @@ func (e *SdfsError) Error() string {
 	return fmt.Sprintf("SDFS Error %s %s", e.Err, e.ErrorCode)
 }
 
-func clientInterceptor(
+type SdfsInterceptor struct {
+	address     string
+	credentials *Credentials
+	grpcSSL     bool
+	token       string
+}
+
+func (n *SdfsInterceptor) clientInterceptor(
 
 	ctx context.Context,
 	method string,
@@ -90,29 +114,28 @@ func clientInterceptor(
 	// Logic before invoking the invoker
 	// Calls the invoker to execute RPC
 	if method != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
-		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
+		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 		err := invoker(_ctx, method, req, reply, cc, opts...)
 		if status.Code(err) == codes.Unauthenticated {
-			token, err := authenicateUser(ctx)
+			n.token, err = n.authenicateUser()
 			if err != nil {
 				return err
 			}
-			authtoken = token
-			_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
+			_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 			err = invoker(_ctx, method, req, reply, cc, opts...)
-			if verbose {
+			if Verbose {
 				log.Printf("unauthenticated status code %s for method %s", status.Code(err), method)
 			}
 			return err
 
 		}
-		if verbose && err != nil {
+		if Verbose && err != nil {
 			log.Printf("authenticated status code %s for method %s", status.Code(err), method)
 		}
 		return err
 	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	if verbose {
+	if Verbose {
 		log.Printf("status code %s for method %s", status.Code(err), method)
 	}
 	return err
@@ -121,11 +144,27 @@ func clientInterceptor(
 
 }
 
-func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// Logic before invoking the invoker
 	// Calls the invoker to execute RPC
-	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+authtoken)
+	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 	s, err := streamer(_ctx, desc, cc, method, opts...)
+	if status.Code(err) == codes.Unauthenticated {
+		n.token, err = n.authenicateUser()
+		if err != nil {
+			return nil, err
+		}
+		_ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
+		s, err := streamer(_ctx, desc, cc, method, opts...)
+		if Verbose {
+			log.Printf("unauthenticated status code %s for method %s", status.Code(err), method)
+		}
+		return s, err
+
+	}
+	if Verbose && err != nil {
+		log.Printf("authenticated status code %s for method %s", status.Code(err), method)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -137,36 +176,80 @@ func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grp
 
 //CloseConnection closes the grpc connection to the volume
 func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
-	return n.clnt.Close()
+	return n.Clnt.Close()
 }
 
-func authenicateUser(ctx context.Context) (token string, err error) {
+func (n *SdfsInterceptor) authenicateUser() (token string, err error) {
+	_ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	defer cancel()
 	creds, err := getCredentials("")
-
 	if err != nil {
 		return token, err
 	}
 	var conn *grpc.ClientConn
 
-	if grpcSSL == true {
+	if n.grpcSSL {
 		config := &tls.Config{}
-		if creds.DisableTrust {
+
+		cert, err := getCert(n.credentials.ServerURL)
+		certPool := x509.NewCertPool()
+		if err != nil {
+			return "", err
+		} else if cert != nil {
+			log.Printf("found cert %s", cert.Subject.CommonName)
+			certPool.AddCert(cert)
 			config = &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: false,
+				ServerName:         cert.Subject.CommonName,
+				RootCAs:            certPool,
 			}
 		}
-		conn, err = grpc.Dial(grpcAddress, grpc.WithBlock(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		if creds.DisableTrust {
+			config.InsecureSkipVerify = true
+		}
+
+		if creds.Mtls {
+			if len(creds.MtlsCACert) > 0 {
+				if config.RootCAs == nil {
+					config.RootCAs = x509.NewCertPool()
+				}
+				bs, err := ioutil.ReadFile(creds.MtlsCACert)
+				if err != nil {
+					log.Printf("unable to load cert %s : %v\n", creds.MtlsCACert, err)
+					return "", fmt.Errorf("unable to load cert %s : %v", creds.MtlsCACert, err)
+				}
+				ok := config.RootCAs.AppendCertsFromPEM(bs)
+				if !ok {
+					log.Printf("failed to append cert %s", creds.MtlsCACert)
+					return "", fmt.Errorf("failed to append cert %s", creds.MtlsCACert)
+				}
+
+			}
+			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+			if err != nil {
+				log.Printf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+				return "", fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+			}
+			config.Certificates = []tls.Certificate{clientCert}
+		}
+		conn, err = grpc.Dial(n.address, grpc.WithBlock(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		if err != nil {
+			log.Printf("did not connect: %v", err)
+			return token, fmt.Errorf("unable to initialize sdfsClient")
+		}
 
 	} else {
-		conn, err = grpc.Dial(grpcAddress, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err = grpc.Dial(n.address, grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Printf("did not connect: %v", err)
+			return token, fmt.Errorf("unable to initialize sdfsClient")
+		}
 	}
 
-	if err != nil {
-		log.Printf("did not connect: %v", err)
-		return token, fmt.Errorf("unable to initialize sdfsClient")
-	}
 	vc := spb.NewVolumeServiceClient(conn)
-	auth, err := vc.AuthenticateUser(ctx, &spb.AuthenticationRequest{Username: "admin", Password: creds.Password})
+
+	defer cancel()
+	auth, err := vc.AuthenticateUser(_ctx, &spb.AuthenticationRequest{Username: creds.Username, Password: creds.Password})
 	if err != nil {
 		log.Printf("did not connect: %v", err)
 		return token, err
@@ -175,7 +258,7 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 		return token, &SdfsError{Err: auth.GetError(), ErrorCode: auth.GetErrorCode()}
 	}
 	token = auth.GetToken()
-	if verbose {
+	if Verbose {
 		log.Printf("found token %s", token)
 	}
 	err = conn.Close()
@@ -183,6 +266,32 @@ func authenicateUser(ctx context.Context) (token string, err error) {
 		log.Printf("did not connect: %v", err)
 	}
 	return token, err
+}
+
+func setCertPath(creds *Credentials) (err error) {
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	if len(creds.MtlsCert) == 0 {
+		creds.MtlsCert = user.HomeDir + "/.sdfs/client.crt"
+	}
+	if len(creds.Mtlskey) == 0 {
+		creds.Mtlskey = user.HomeDir + "/.sdfs/client.key"
+	}
+	if len(creds.MtlsCACert) == 0 {
+		creds.MtlsCACert = user.HomeDir + "/.sdfs/ca.crt"
+	}
+	if len(MtlsKey) > 0 {
+		creds.Mtlskey = MtlsKey
+	}
+	if len(MtlsCert) > 0 {
+		creds.MtlsCert = MtlsCert
+	}
+	if len(MtlsCACert) > 0 {
+		creds.MtlsCACert = MtlsCACert
+	}
+	return nil
 }
 
 func getCredentials(configPath string) (creds *Credentials, err error) {
@@ -203,12 +312,22 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	}
 	_, err = os.Stat(configPath)
 	if os.IsNotExist(err) {
+		err := setCertPath(creds)
+		if err != nil {
+			return nil, err
+		}
+		if Mtls {
+			creds.Mtls = true
+		}
 		if DisableTrust {
 			creds.DisableTrust = true
 		}
 
 		if len(Password) > 0 {
 			creds.Password = Password
+		}
+		if len(UserName) > 0 {
+			creds.Username = UserName
 		}
 		return creds, nil
 	}
@@ -230,6 +349,13 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 	if DisableTrust {
 		creds.DisableTrust = true
 	}
+	if Mtls {
+		creds.Mtls = true
+	}
+	err = setCertPath(creds)
+	if err != nil {
+		return nil, err
+	}
 
 	if !strings.HasPrefix(creds.ServerURL, "sdfs") {
 		return nil, fmt.Errorf("unsupported server type %s, only supports sdfs:// or sdfss://", creds.ServerURL)
@@ -241,7 +367,7 @@ func getCredentials(configPath string) (creds *Credentials, err error) {
 
 }
 
-func parseURL(url string) (string, string, bool, error) {
+func ParseURL(url string) (string, string, bool, error) {
 	u, err := xnet.ParseURL(url)
 	if err != nil {
 		return "", "", false, err
@@ -260,22 +386,44 @@ func parseURL(url string) (string, string, bool, error) {
 	return address, commonPath, useSSL, nil
 }
 
-//AddTrustedCert adds a trusted Cert
-func AddTrustedCert(url string) error {
-	address, _, _, err := parseURL(url)
-	if err != nil {
-		return err
-	}
-	config := tls.Config{InsecureSkipVerify: true}
-	conn, err := tls.Dial("tcp", address, &config)
+/*
+func verifyPeerCerts(serverName string, rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	// some dummy code to check all certs available (not very useful and indeed a security issue if
+	// InsecureSkipVerify is set to true and the server supplies arbitrary certs)
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
 
-	if err != nil {
-		return err
+		if err != nil {
+			log.Println("Error: ", err)
+			continue
+		}
+
+		hash := sha1.Sum(rawCerts[i])
+		fmt.Printf("Fingerprint: %x\n\n", hash)
+
+		fmt.Println(hash, cert.DNSNames, cert.Subject, cert.VerifyHostname(serverName))
 	}
-	defer conn.Close()
+	return nil
+}
+*/
+
+func savePeerCerts(serverName string, rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	// some dummy code to check all certs available (not very useful and indeed a security issue if
+	// InsecureSkipVerify is set to true and the server supplies arbitrary certs)
 	var b bytes.Buffer
-	for _, cert := range conn.ConnectionState().PeerCertificates {
-		err := pem.Encode(&b, &pem.Block{
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
+
+		if err != nil {
+			log.Printf("Error: %v", err)
+			continue
+		}
+
+		hash := sha1.Sum(rawCerts[i])
+		log.Printf("Fingerprint: %x\n\n", hash)
+
+		log.Println(hash, cert.DNSNames, cert.Subject)
+		err = pem.Encode(&b, &pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert.Raw,
 		})
@@ -289,34 +437,44 @@ func AddTrustedCert(url string) error {
 	}
 	configPath := user.HomeDir + "/.sdfs/keys/"
 	os.MkdirAll(configPath, 0700)
-	fn := fmt.Sprintf("%s%s.pem", configPath, address)
+	fn := fmt.Sprintf("%s%s.pem", configPath, strings.ReplaceAll(serverName, ":", "_"))
 	err = ioutil.WriteFile(fn, b.Bytes(), 0600)
 	if err != nil {
 		return err
 	}
-	nb, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return err
-	}
-	block, _ := pem.Decode(nb)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return err
-	}
-	//fmt.Printf("cert=%v", cert)
+	log.Printf("wrote cert to %s", fn)
+	return nil
+}
 
-	certPool := x509.NewCertPool()
-	certPool.AddCert(cert)
-	nconfig := &tls.Config{
-		InsecureSkipVerify: false,
-		ServerName:         cert.Subject.CommonName,
-		RootCAs:            certPool,
+/*
+func tlsHost(targetAddr string) string {
+	if strings.LastIndex(targetAddr, ":") > strings.LastIndex(targetAddr, "]") {
+		targetAddr = targetAddr[:strings.LastIndex(targetAddr, ":")]
 	}
-	nconn, err := tls.Dial("tcp", address, nconfig)
+	return targetAddr
+}
+*/
+
+//AddTrustedCert adds a trusted Cert
+func AddTrustedCert(url string) error {
+	log.Println("adding cert")
+	address, _, _, err := ParseURL(url)
 	if err != nil {
 		return err
 	}
-	nconn.Close()
+	config := tls.Config{
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			return savePeerCerts(address, rawCerts, verifiedChains)
+		},
+	}
+	conn, err := tls.Dial("tcp", address, &config)
+
+	if err != nil {
+		log.Printf("unable to connect to address : %v", err)
+		return err
+	}
+	defer conn.Close()
 	return nil
 }
 
@@ -327,7 +485,7 @@ func getCert(address string) (*x509.Certificate, error) {
 	}
 	configPath := user.HomeDir + "/.sdfs/keys/"
 
-	fn := fmt.Sprintf("%s%s.pem", configPath, address)
+	fn := fmt.Sprintf("%s%s.pem", configPath, strings.ReplaceAll(address, ":", "_"))
 	_, err = os.Stat(fn)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -345,9 +503,8 @@ func getCert(address string) (*x509.Certificate, error) {
 }
 
 //NewConnection Created a new connectio given a path
-func NewConnection(path string) (*SdfsConnection, error) {
+func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	var address string
-	var commonPath string
 	var useSSL bool
 	u, err := xnet.ParseURL(path)
 	if err != nil {
@@ -358,12 +515,8 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 	if u.Scheme == "sdfss" {
 		useSSL = true
-		grpcSSL = true
-	} else if commonPath == "" {
-		commonPath = u.Path
 	}
 	address = u.Host
-	grpcAddress = address
 
 	var conn *grpc.ClientConn
 	_, err = user.Current()
@@ -378,19 +531,17 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	var interceptor *SdfsInterceptor
 	defer cancel()
-	if useSSL == true {
+	if useSSL {
 		config := &tls.Config{}
-		if creds.DisableTrust {
-			config = &tls.Config{
-				InsecureSkipVerify: true,
-			}
-		}
+
 		cert, err := getCert(address)
+		certPool := x509.NewCertPool()
 		if err != nil {
 			return nil, err
 		} else if cert != nil {
-			certPool := x509.NewCertPool()
+			log.Printf("found cert %s", cert.Subject.CommonName)
 			certPool.AddCert(cert)
 			config = &tls.Config{
 				InsecureSkipVerify: false,
@@ -398,13 +549,47 @@ func NewConnection(path string) (*SdfsConnection, error) {
 				RootCAs:            certPool,
 			}
 		}
+		if creds.DisableTrust {
+			config.InsecureSkipVerify = true
+		}
 
-		//fmt.Printf("TLS Connecting to %s  disable_trust=%t\n", address, creds.DisableTrust)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		if creds.Mtls {
+			if len(creds.MtlsCACert) > 0 {
+				if config.RootCAs == nil {
+					config.RootCAs = x509.NewCertPool()
+				}
+				bs, err := ioutil.ReadFile(creds.MtlsCACert)
+				if err != nil {
+					log.Printf("unable to load cert %s : %v\n", creds.MtlsCACert, err)
+					return nil, fmt.Errorf("unable to load cert %s : %v", creds.MtlsCACert, err)
+				}
+				ok := config.RootCAs.AppendCertsFromPEM(bs)
+				if !ok {
+					log.Printf("failed to append cert %s", creds.MtlsCACert)
+					return nil, fmt.Errorf("failed to append cert %s", creds.MtlsCACert)
+				}
+				log.Printf("loaded cert %s", string(bs))
 
+			}
+			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+			if err != nil {
+				log.Printf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+				return nil, fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+			}
+			config.Certificates = []tls.Certificate{clientCert}
+		}
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
+
+		//fmt.Printf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
+		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		if err != nil {
+			log.Printf("did not connect to %s : %v\n", path, err)
+			return nil, fmt.Errorf("unable to initialize sdfsClient")
+		}
 	} else {
 		//fmt.Printf("Connecting to %s \n", address)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithStreamInterceptor(clientStreamInterceptor))
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
+		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 	}
 	//fmt.Print("BLA")
 
@@ -417,18 +602,28 @@ func NewConnection(path string) (*SdfsConnection, error) {
 	}
 
 	vc := spb.NewVolumeServiceClient(conn)
-	_, err = vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
-	if err != nil {
-		return nil, err
-	}
+	/*
+		_, err = vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
+		if err != nil {
+			log.Printf("did not execute gc command: %v\n", err)
+			return nil, err
+		}
+	*/
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
+	uc := spb.NewSdfsUserServiceClient(conn)
+	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc, SdfsInterceptor: interceptor}
+	if dedupeEnabled {
+		log.Printf("Initializing Dedupe Engine\n")
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug)
+		if err != nil {
+			log.Printf("error initializing dedupe connection: %v\n", err)
+			return nil, err
+		}
+		sc.Dedupe = de
+	}
 
-	return &SdfsConnection{clnt: conn, vc: vc, fc: fc, evt: evt}, nil
-}
-
-func (n *SdfsConnection) sdfsPathJoin(args ...string) string {
-	return path.Join(args...)
+	return sc, nil
 }
 
 //RmDir removes a given directory
@@ -470,8 +665,15 @@ func (n *SdfsConnection) MkDirAll(ctx context.Context, path string) error {
 	}
 }
 
+func (n *SdfsConnection) ClearCreds() {
+	n.SdfsInterceptor.token = ""
+}
+
 //Stat gets a specific file info
 func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoResponse, error) {
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(path)
+	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: path})
 	if err != nil {
 		log.Print(err)
@@ -496,6 +698,9 @@ func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compa
 
 //DeleteFile removes a given file
 func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
+	if n.DedupeEnabled {
+		n.Dedupe.CloseFile(path)
+	}
 	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: path})
 	if err != nil {
 		log.Print(err)
@@ -508,6 +713,10 @@ func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 
 //CopyExtent creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcStart, dstStart, len int64) (written int64, err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(src)
+		n.Dedupe.SyncFile(dst)
+	}
 	fi, err := n.fc.CopyExtent(ctx, &spb.CopyExtentRequest{SrcFile: src, DstFile: dst, SrcStart: srcStart, DstStart: dstStart, Length: len})
 	if err != nil {
 		log.Print(err)
@@ -532,6 +741,10 @@ func (n *SdfsConnection) StatFS(ctx context.Context) (stat *spb.StatFS, err erro
 
 //Rename renames a file
 func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.CloseFile(src)
+		n.Dedupe.CloseFile(dst)
+	}
 	fi, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: src, Dest: dst})
 	if err != nil {
 		log.Print(err)
@@ -544,6 +757,10 @@ func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error
 
 //CopyFile creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnImmediately bool) (event *spb.SDFSEvent, err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(src)
+		n.Dedupe.SyncFile(dst)
+	}
 	fi, err := n.fc.CreateCopy(ctx, &spb.FileSnapshotRequest{
 		Src:  src,
 		Dest: dst,
@@ -724,6 +941,9 @@ func (n *SdfsConnection) Utime(ctx context.Context, path string, atime, mtime in
 
 //Truncate truncates a given file to a given length in bytes
 func (n *SdfsConnection) Truncate(ctx context.Context, path string, length int64) (err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(path)
+	}
 	fi, err := n.fc.Truncate(ctx, &spb.TruncateRequest{Path: path, Length: length})
 	if err != nil {
 		log.Print(err)
@@ -760,6 +980,9 @@ func (n *SdfsConnection) ReadLink(ctx context.Context, path string) (linkpath st
 
 //GetAttr returns Stat for a given file
 func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.Stat, err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(path)
+	}
 	fi, err := n.fc.GetAttr(ctx, &spb.StatRequest{Path: path})
 	if err != nil {
 		log.Print(err)
@@ -772,6 +995,9 @@ func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.St
 
 //Flush flushes the requested file to underlying storage
 func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.Sync(fh)
+	}
 	fi, err := n.fc.Flush(ctx, &spb.FlushRequest{Path: path, Fd: fh})
 	if err != nil {
 		log.Print(err)
@@ -808,6 +1034,9 @@ func (n *SdfsConnection) Chmod(ctx context.Context, path string, mode int32) (er
 
 //Unlink deletes the given file
 func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.CloseFile(path)
+	}
 	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: path})
 	if err != nil {
 		log.Print(err)
@@ -820,18 +1049,26 @@ func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
 
 //Write writes data to a given filehandle
 func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
-	fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
-	if err != nil {
-		log.Print(err)
-		return err
-	} else if fi.GetErrorCode() > 0 {
-		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+
+	if n.DedupeEnabled {
+		return n.Dedupe.Write(fh, offset, data, length)
+	} else {
+		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
+		if err != nil {
+			log.Print(err)
+			return err
+		} else if fi.GetErrorCode() > 0 {
+			return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		}
+		return nil
 	}
-	return nil
 }
 
 //Read reads data from a given filehandle
 func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, length int32) (data []byte, err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.Sync(fh)
+	}
 	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: fh, Start: offset, Len: length})
 	if err != nil {
 		log.Print(err)
@@ -844,6 +1081,9 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 
 //Release closes a given filehandle
 func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
+	if n.DedupeEnabled {
+		n.Dedupe.Close(fh)
+	}
 	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
 	if err != nil {
 		log.Print(err)
@@ -851,6 +1091,7 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 	} else if fi.GetErrorCode() > 0 {
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
+
 	return nil
 }
 
@@ -874,6 +1115,9 @@ func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh
 		return fh, err
 	} else if fi.GetErrorCode() > 0 {
 		return fh, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	if n.DedupeEnabled {
+		n.Dedupe.Open(path, fi.FileHandle)
 	}
 	return fi.FileHandle, nil
 }
@@ -969,11 +1213,6 @@ func (n *SdfsConnection) CleanStore(ctx context.Context, compact, waitForComplet
 		return n.WaitForEvent(ctx, eventid)
 	}
 	return n.GetEvent(ctx, eventid)
-}
-
-//Clear AuthToken will remove the current auth token to authenticate to the client
-func ClearAuthToken() {
-	authtoken = ""
 }
 
 //DeleteCloudVolume deletes a volume that is no longer in use
@@ -1154,7 +1393,6 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
-	var fh int64
 	n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: sdfsTempFolder})
 	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{Path: tmpname})
 	if err != nil {
@@ -1162,52 +1400,44 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	} else if mkf.GetErrorCode() > 0 {
 		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
 	}
-	fhr, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: tmpname})
+	fh, err := n.Open(ctx, tmpname, -1)
 	if err != nil {
 		return -1, err
-	} else if fhr.GetErrorCode() > 0 {
-		return -1, &SdfsError{Err: fhr.GetError(), ErrorCode: fhr.GetErrorCode()}
 	}
-	defer n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: tmpname})
-	fh = fhr.GetFileHandle()
+	defer n.Unlink(ctx, tmpname)
 	b1 := make([]byte, 128*1024)
 	var offset int64 = 0
 	var n1 int = 0
 	r, err := os.Open(src)
-	defer r.Close()
 	if err != nil {
 		return -1, err
 	}
+	defer r.Close()
+
 	n1, err = r.Read(b1)
 	s := make([]byte, n1)
 	copy(s, b1)
-	fwr, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: s, Start: offset, Len: int32(n1)})
+	err = n.Write(ctx, fh, s, offset, int32(n1))
 	offset += int64(n1)
 	if err != nil {
-		n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+		n.Release(ctx, fh)
 		return -1, err
-	} else if fwr.GetErrorCode() > 0 {
-		n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
-		return -1, &SdfsError{Err: fwr.GetError(), ErrorCode: fwr.GetErrorCode()}
 	}
 	for n1 > 0 {
 		n1, err = r.Read(b1)
 		if n1 > 0 {
 			s = make([]byte, n1)
 			copy(s, b1)
-			fwr, err = n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: s, Start: offset, Len: int32(n1)})
+			err = n.Write(ctx, fh, s, offset, int32(n1))
 			offset += int64(n1)
 			if err != nil {
-				n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+				n.Release(ctx, fh)
 				return -1, err
-			} else if fwr.GetErrorCode() > 0 {
-				n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
-				return -1, &SdfsError{Err: fwr.GetError(), ErrorCode: fwr.GetErrorCode()}
 			}
 		}
 	}
 
-	n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+	n.Release(ctx, fh)
 	dir := path.Dir(dst)
 	if dir != "" {
 		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: dir})
@@ -1217,28 +1447,26 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 			return -1, &SdfsError{Err: mkd.GetError(), ErrorCode: mkd.GetErrorCode()}
 		}
 	}
-	n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: dst})
+	n.Unlink(ctx, dst)
 
-	sp, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: tmpname, Dest: dst})
+	err = n.Rename(ctx, tmpname, dst)
 	if err != nil {
 		return -1, err
-	} else if sp.GetErrorCode() > 0 {
-		return -1, &SdfsError{Err: sp.GetError(), ErrorCode: sp.GetErrorCode()}
 	}
 
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: dst})
+	fi, err := n.Stat(ctx, dst)
 	if err != nil {
 		return -1, err
-	} else if fi.GetErrorCode() > 0 {
-		return -1, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 
-	return fi.GetResponse()[0].GetSize(), nil
+	return fi.GetSize(), nil
 }
 
 //Download downloads a file from SDFS locally
 func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesread int64, err error) {
-
+	if n.DedupeEnabled {
+		n.Dedupe.SyncFile(src)
+	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: src})
 	if err != nil {
 		return -1, err
@@ -1256,6 +1484,9 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 	var blocksize int32 = 128 * 1024
 	var length = fi.GetResponse()[0].Size
 	writer, err := os.Create(dst)
+	if err != nil {
+		return -1, err
+	}
 	defer writer.Close()
 	for read < length {
 		if blocksize > int32(length-read) {
@@ -1280,4 +1511,108 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 	}
 
 	return read, nil
+}
+
+func parsePermissions(permissions []string) *spb.SdfsPermissions {
+	perms := &spb.SdfsPermissions{}
+	for _, s := range permissions {
+		if s == "ADMIN" {
+			perms.ADMIN = true
+		}
+		if s == "METADATA_READ" {
+			perms.METADATA_READ = true
+		}
+		if s == "METADATA_WRITE" {
+			perms.METADATA_WRITE = true
+		}
+		if s == "FILE_READ" {
+			perms.FILE_READ = true
+		}
+		if s == "FILE_WRITE" {
+			perms.FILE_WRITE = true
+		}
+		if s == "FILE_DELETE" {
+			perms.FILE_DELETE = true
+		}
+		if s == "VOLUME_READ" {
+			perms.VOLUME_READ = true
+		}
+		if s == "CONFIG_READ" {
+			perms.CONFIG_READ = true
+		}
+		if s == "CONFIG_WRITE" {
+			perms.CONFIG_WRITE = true
+		}
+		if s == "EVENT_READ" {
+			perms.EVENT_READ = true
+		}
+		if s == "AUTH_READ" {
+			perms.AUTH_READ = true
+		}
+		if s == "AUTH_WRITE" {
+			perms.AUTH_WRITE = true
+		}
+	}
+	return perms
+}
+
+func (n *SdfsConnection) AddUser(ctx context.Context, user, password, description string, permissions []string) error {
+
+	fi, err := n.us.AddUser(ctx, &spb.AddUserRequest{Permissions: parsePermissions(permissions), User: user, Password: password, Description: description})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) ListUsers(ctx context.Context) ([]*spb.SdfsUser, error) {
+
+	fi, err := n.us.ListUsers(ctx, &spb.ListUsersRequest{})
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	} else if fi.GetErrorCode() > 0 {
+		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+
+	return fi.Users, nil
+}
+
+func (n *SdfsConnection) SetSdfsPassword(ctx context.Context, user, password string) error {
+
+	fi, err := n.us.SetSdfsPassword(ctx, &spb.SetUserPasswordRequest{User: user, Password: password})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) SetSdfsPermissions(ctx context.Context, user string, permissions []string) error {
+
+	fi, err := n.us.SetSdfsPermissions(ctx, &spb.SetPermissionsRequest{Permissions: parsePermissions(permissions), User: user})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) DeleteUser(ctx context.Context, user string) error {
+
+	fi, err := n.us.DeleteUser(ctx, &spb.DeleteUserRequest{User: user})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
 }
