@@ -568,7 +568,7 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 					log.Printf("failed to append cert %s", creds.MtlsCACert)
 					return nil, fmt.Errorf("failed to append cert %s", creds.MtlsCACert)
 				}
-				log.Printf("loaded cert %s", string(bs))
+				//log.Printf("loaded cert %s", string(bs))
 
 			}
 			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
