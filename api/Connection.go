@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/user"
 	"path"
@@ -22,6 +21,7 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -560,34 +560,38 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 				}
 				bs, err := ioutil.ReadFile(creds.MtlsCACert)
 				if err != nil {
-					log.Printf("unable to load cert %s : %v\n", creds.MtlsCACert, err)
+					log.Errorf("unable to load cert %s : %v\n", creds.MtlsCACert, err)
 					return nil, fmt.Errorf("unable to load cert %s : %v", creds.MtlsCACert, err)
 				}
+
 				ok := config.RootCAs.AppendCertsFromPEM(bs)
 				if !ok {
-					log.Printf("failed to append cert %s", creds.MtlsCACert)
+					log.Errorf("failed to append cert %s\n", creds.MtlsCACert)
 					return nil, fmt.Errorf("failed to append cert %s", creds.MtlsCACert)
 				}
-				//log.Printf("loaded cert %s", string(bs))
+
+				log.Debugf("loaded ca cert %s\n", string(creds.MtlsCACert))
 
 			}
 			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+
 			if err != nil {
-				log.Printf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+				log.Errorf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
 				return nil, fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
 			}
 			config.Certificates = []tls.Certificate{clientCert}
+			log.Debugf("loaded certs MtlsCert=%s Mtlskey=%s\n", string(creds.MtlsCert), string(creds.Mtlskey))
 		}
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
-		//fmt.Printf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
+		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 		if err != nil {
 			log.Printf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
 		}
 	} else {
-		//fmt.Printf("Connecting to %s \n", address)
+		log.Debugf("Connecting to %s \n", address)
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 	}
