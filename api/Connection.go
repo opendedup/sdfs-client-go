@@ -592,8 +592,9 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 		}
 	} else {
 		log.Debugf("Connecting to %s \n", address)
+		maxMsgSize := 2097152 * 40
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
-		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 	}
 	//fmt.Print("BLA")
 
