@@ -811,6 +811,42 @@ func TestCloud(t *testing.T) {
 	stopAndRemoveContainer(cli, containername)
 	stopAndRemoveContainer(cli, acontainername)
 }
+func TestSubPath(t *testing.T) {
+	address = "sdfss://localhost:6442/subdir"
+	t.Run("SubPathTest", func(t *testing.T) {
+		TestNewConnection(t)
+		TestChow(t)
+		TestMkNod(t)
+		TestMkDir(t)
+		TestMkDirAll(t)
+		cleanStore(t, 80)
+		TestCopyExtent(t)
+		TestCopyFile(t)
+		TestEvents(t)
+		TestInfo(t)
+		TestListDir(t)
+		TestRename(t)
+		TestSetUtime(t)
+		TestStatFS(t)
+		TestSymLink(t)
+		TestTuncate(t)
+		TestXAttrs(t)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, false)
+	assert.NotNil(t, connection)
+
+	fn, _ := makeFile(t, "", int64(1024), false)
+	_, err := connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	connection.CloseConnection(ctx)
+	address = "sdfss://localhost:6442"
+	connection = connect(t, false)
+	defer connection.CloseConnection(ctx)
+	_, err = connection.Stat(ctx, fmt.Sprintf("%s/%s", "subdir", fn))
+	assert.Nil(t, err)
+}
 
 func cloudInfoTest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
