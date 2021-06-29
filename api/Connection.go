@@ -25,7 +25,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/security/advancedtls"
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v2"
 )
@@ -534,7 +536,7 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	defer cancel()
 	if useSSL {
 		config := &tls.Config{}
-
+		var tCreds credentials.TransportCredentials
 		cert, err := getCert(address)
 		certPool := x509.NewCertPool()
 		if err != nil {
@@ -572,23 +574,61 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 				log.Debugf("loaded ca cert %s\n", string(creds.MtlsCACert))
 
 			}
-			clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+			if creds.DisableTrust {
+				credRefreshingInterval := 500 * time.Millisecond
+				identityOptions := pemfile.Options{
+					CertFile:        creds.MtlsCert,
+					KeyFile:         creds.Mtlskey,
+					RefreshDuration: credRefreshingInterval,
+				}
+				identityProvider, err := pemfile.NewProvider(identityOptions)
+				if err != nil {
+					return nil, err
+				}
+				options := &advancedtls.ClientOptions{
 
-			if err != nil {
-				log.Errorf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
-				return nil, fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+					IdentityOptions: advancedtls.IdentityCertificateOptions{
+						IdentityProvider: identityProvider,
+					},
+					VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
+						return &advancedtls.VerificationResults{}, nil
+					},
+					/*
+						RootOptions: advancedtls.RootCertificateOptions{
+							GetRootCertificates: func(params *advancedtls.GetRootCAsParams) (*advancedtls.GetRootCAsResults, error) {
+								log.Info("kkkk")
+								return nil, fmt.Errorf("wow")
+							},
+						},*/
+					VType: advancedtls.SkipVerification,
+				}
+				tCreds, err = advancedtls.NewClientCreds(options)
+				if err != nil {
+					log.Errorf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+					return nil, fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+				}
+			} else {
+				clientCert, err := tls.LoadX509KeyPair(creds.MtlsCert, creds.Mtlskey)
+				if err != nil {
+					log.Errorf("did not load certs %s and %s : %v\n", creds.MtlsCert, creds.Mtlskey, err)
+					return nil, fmt.Errorf("did not load certs %s and %s", creds.MtlsCert, creds.Mtlskey)
+				}
+				config.Certificates = []tls.Certificate{clientCert}
+				tCreds = credentials.NewTLS(config)
 			}
-			config.Certificates = []tls.Certificate{clientCert}
-			log.Debugf("loaded certs MtlsCert=%s Mtlskey=%s\n", string(creds.MtlsCert), string(creds.Mtlskey))
+			log.Infof("loaded certs MtlsCert=%s Mtlskey=%s\n", string(creds.MtlsCert), string(creds.Mtlskey))
+		} else {
+			tCreds = credentials.NewTLS(config)
 		}
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
 		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor), grpc.WithTransportCredentials(tCreds))
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
 		}
+
 	} else {
 		log.Debugf("Connecting to %s \n", address)
 		maxMsgSize := 2097152 * 40
