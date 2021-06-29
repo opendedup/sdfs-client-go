@@ -40,6 +40,7 @@ require (
 	golang.org/x/sys v0.0.0-20210521203332-0cec03c779c1 // indirect
 	google.golang.org/genproto v0.0.0-20210521181308-5ccab8a35a9a // indirect
 	google.golang.org/grpc v1.38.0
+	google.golang.org/grpc/security/advancedtls v0.0.0-20210628165121-83f9def5feb3 // indirect
 	google.golang.org/protobuf v1.26.0
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/ldap.v3 v3.0.3 // indirect
