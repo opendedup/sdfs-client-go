@@ -276,6 +276,9 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 			ce := &spb.ChunkEntry{}
 			ces[i] = ce
 		}
+		if len(fingers[i].data) == 0 {
+			log.Warnf("found null data at %d arlen %d", i, len(fingers))
+		}
 
 	}
 	wchreq.Chunks = ces
@@ -291,7 +294,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 		if !fingers[i].dedup {
 			fingers[i].archive = fi.InsertRecords[i].Hashloc
 			fingers[i].dedup = !fi.InsertRecords[i].Inserted
-			if fingers[i].archive == -1 {
+			if fingers[i].archive == -1 && len(fingers[i].data) > 0 {
 				log.Warnf("Archive should not be -1")
 				return nil, fmt.Errorf("archive should not be -1")
 			}
@@ -421,7 +424,7 @@ func (j *Job) Do() {
 		var nextPos int32
 		for i := 0; ; i++ {
 			clen, err := c.Next()
-			if err == io.EOF {
+			if err == io.EOF || clen == 0 {
 				break
 			} else if err != nil {
 				log.Error(err)

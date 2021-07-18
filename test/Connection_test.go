@@ -1057,16 +1057,16 @@ func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	cli, err := client.NewClientWithOpts(client.FromEnv)
+
 	ctx, cancel := context.WithCancel(context.Background())
+	cli.NegotiateAPIVersion(ctx)
 	defer cancel()
 	containername := string(randBytesMaskImpr(16))
-	if runtime.GOOS != "windows" {
+	_, cc := os.LookupEnv("TEST_NO_CREATE_CONTAINER")
+	if runtime.GOOS != "windows" && !cc {
 		if err != nil {
 			fmt.Printf("Unable to create docker client %v", err)
 		}
-
-		cli.NegotiateAPIVersion(ctx)
-
 		portopening := "6442"
 		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
 			fmt.Sprintf("PASSWORD=%s", password), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
@@ -1099,7 +1099,8 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Unable to create connection %v", err)
 	}
 	code := m.Run()
-	if runtime.GOOS != "windows" {
+	_, rc := os.LookupEnv("TEST_NO_REMOVE_CONTAINER")
+	if runtime.GOOS != "windows" && !rc {
 		stopAndRemoveContainer(cli, containername)
 	}
 	os.Exit(code)
@@ -1403,7 +1404,7 @@ func deleteFile(t *testing.T, fn string) {
 
 func connect(t *testing.T, dedupe bool) *api.SdfsConnection {
 	api.DisableTrust = true
-	api.Debug = true
+	api.Debug = false
 	connection, err := api.NewConnection(address, dedupe)
 
 	if err != nil {

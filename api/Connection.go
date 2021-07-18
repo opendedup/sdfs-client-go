@@ -534,6 +534,7 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	var interceptor *SdfsInterceptor
 	defer cancel()
+	maxMsgSize := 2097152 * 40
 	if useSSL {
 		config := &tls.Config{}
 		var tCreds credentials.TransportCredentials
@@ -623,7 +624,11 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
 		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
-		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor), grpc.WithTransportCredentials(tCreds))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
+			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
+			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
+			grpc.WithTransportCredentials(tCreds))
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
@@ -631,9 +636,12 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 
 	} else {
 		log.Debugf("Connecting to %s \n", address)
-		maxMsgSize := 2097152 * 40
+
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
-		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)), grpc.WithUnaryInterceptor(interceptor.clientInterceptor), grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
+		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
+			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
+			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 	}
 	//fmt.Print("BLA")
 
