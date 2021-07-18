@@ -51,19 +51,22 @@ type DedupeBuffer struct {
 	fileHandle int64
 	limit      int32
 	Flushed    bool
+	Flushing   bool
 }
 
 type DedupeFile struct {
-	mu          sync.Mutex
-	cache       *lru.Cache
-	fileHandles map[int64]bool
-	fileName    string
-	err         error
+	mu              sync.Mutex
+	cache           *lru.Cache
+	flushingBuffers map[int64]*DedupeBuffer
+	fileHandles     map[int64]bool
+	fileName        string
+	err             error
 }
 
 type Job struct {
 	buffer *DedupeBuffer
 	engine *DedupeEngine
+	file   *DedupeFile
 	wg     *sync.WaitGroup
 }
 
@@ -130,23 +133,29 @@ func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoRespons
 func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	onEvicted := func(k interface{}, v interface{}) {
-		buffer := v.(*DedupeBuffer)
-		n.pool.Submit(&Job{buffer: buffer, engine: n})
 
-	}
 	file, ok := n.openFiles[fileName]
 	if !ok {
+
+		file = &DedupeFile{
+			fileHandles:     make(map[int64]bool),
+			fileName:        fileName,
+			flushingBuffers: make(map[int64]*DedupeBuffer),
+		}
+		onEvicted := func(k interface{}, v interface{}) {
+			buffer := v.(*DedupeBuffer)
+			file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
+			buffer.Flushing = true
+			n.pool.Submit(&Job{buffer: buffer, engine: n, file: file})
+
+		}
 		l, err := lru.NewWithEvict(4, onEvicted)
 		if err != nil {
 			log.Errorf("unable initialize %d : %v", fileHandle, err)
 			return err
 		}
-		file = &DedupeFile{
-			cache:       l,
-			fileHandles: make(map[int64]bool),
-			fileName:    fileName,
-		}
+		file.cache = l
+
 		n.openFiles[fileName] = file
 	}
 	file.mu.Lock()
@@ -171,8 +180,10 @@ func (n *DedupeEngine) Sync(fileHandle int64) {
 				v, ok := file.cache.Get(k)
 				if ok {
 					buffer := v.(*DedupeBuffer)
+					file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
+					buffer.Flushing = true
 					wg.Add(1)
-					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg})
+					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg, file: file})
 				}
 			}
 			wg.Wait()
@@ -231,8 +242,10 @@ func (n *DedupeEngine) SyncFile(fileName string) {
 				v, ok := file.cache.Get(k)
 				if ok {
 					buffer := v.(*DedupeBuffer)
+					file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
+					buffer.Flushing = true
 					wg.Add(1)
-					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg})
+					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg, file: file})
 				}
 			}
 			wg.Wait()
@@ -360,9 +373,22 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 			file.mu.Lock()
 			val, ok = file.cache.Peek(fpos)
 			if !ok {
+				val, ok = file.flushingBuffers[fpos]
+				if ok {
+					delete(file.flushingBuffers, fpos)
+					chunk := val.(*DedupeBuffer)
+					chunk.Flushing = false
+					chunk.Flushed = false
+					file.cache.Add(fpos, val)
+				}
+
+			}
+			if !ok {
 				buf := make([]byte, n.chunkSize)
 				val = &DedupeBuffer{offset: fpos, buffer: buf, fileName: file.fileName}
+				file.cache.Add(fpos, val)
 			}
+
 			file.mu.Unlock()
 		}
 		chunk := val.(*DedupeBuffer)
@@ -376,7 +402,7 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 		chunk.mu.Unlock()
 
 		log.Debugf("wrote fpos %d at %d len %d written %d", fpos, bspos, bepos, w)
-		file.cache.Add(fpos, chunk)
+		file.cache.Add(fpos, val)
 		bytesWritten += int32(w)
 		log.Debugf("bytes written %d", bytesWritten)
 		if bspos+bepos > chunk.limit {
@@ -415,7 +441,7 @@ func (j *Job) Do() {
 	defer cancel()
 	j.buffer.mu.Lock()
 	defer j.buffer.mu.Unlock()
-	if !j.buffer.Flushed {
+	if !j.buffer.Flushed && j.buffer.Flushing {
 		var fingers []*Finger
 		log.Debugf("bytes = [%d] [%d] [%d]", len(j.buffer.buffer), j.buffer.offset, j.buffer.limit)
 		r := bytes.NewReader(j.buffer.buffer[:j.buffer.limit])
@@ -475,6 +501,8 @@ func (j *Job) Do() {
 			}
 			return
 		}
+		delete(j.file.flushingBuffers, j.buffer.offset)
+		j.buffer.Flushing = false
 		j.buffer.Flushed = true
 	}
 

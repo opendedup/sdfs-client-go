@@ -61,7 +61,6 @@ func TestDedupeWriteBuffer(t *testing.T) {
 		assert.Equal(t, wh, rh)
 		hashes = append(hashes, wh)
 	}
-	t.Logf("Wrote data \n")
 	for i := 0; i < 10000; i++ {
 		nh, _ := blake2b.New(32, make([]byte, 0))
 		nb, err := connection.Read(ctx, fh, int64(blockSz*i), int32(blockSz))
@@ -69,6 +68,33 @@ func TestDedupeWriteBuffer(t *testing.T) {
 		nh.Write(nb)
 		rh := nh.Sum(nil)
 		assert.Equal(t, hashes[i], rh)
+
+	}
+	blockSz = 1024 * 1024 * 5
+	var nhashes [][]byte
+	for i := 0; i < 100; i++ {
+		h, err := blake2b.New(32, make([]byte, 0))
+		assert.Nil(t, err)
+		b := randBytesMaskImpr(blockSz)
+		err = connection.Write(ctx, fh, b, int64(blockSz*i), int32(len(b)))
+		h.Write(b)
+		assert.Nil(t, err)
+		wh := h.Sum(nil)
+		nh, _ := blake2b.New(32, make([]byte, 0))
+		nb, err := connection.Read(ctx, fh, int64(blockSz*i), int32(len(b)))
+		assert.Nil(t, err)
+		nh.Write(nb)
+		rh := nh.Sum(nil)
+		assert.Equal(t, wh, rh)
+		nhashes = append(nhashes, wh)
+	}
+	for i := 0; i < 100; i++ {
+		nh, _ := blake2b.New(32, make([]byte, 0))
+		nb, err := connection.Read(ctx, fh, int64(blockSz*i), int32(blockSz))
+		assert.Nil(t, err)
+		nh.Write(nb)
+		rh := nh.Sum(nil)
+		assert.Equal(t, nhashes[i], rh)
 
 	}
 	err = connection.DeleteFile(ctx, fn)
