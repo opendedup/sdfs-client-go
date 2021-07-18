@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/blake2b"
 )
 
 func TestDedupeNewConnection(t *testing.T) {
@@ -28,6 +29,36 @@ func TestDedupeWriteFile(t *testing.T) {
 
 	err := connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
+}
+
+func TestDedupeWriteBuffer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, true)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fn := string(randBytesMaskImpr(16))
+	err := connection.MkNod(ctx, fn, 511, 0)
+	assert.Nil(t, err)
+	fh, err := connection.Open(ctx, fn, 0)
+	assert.Nil(t, err)
+	h, err := blake2b.New(32, make([]byte, 0))
+	assert.Nil(t, err)
+	blockSz := 1024 * 1024 * 5
+	b := randBytesMaskImpr(blockSz)
+	err = connection.Write(ctx, fh, b, 0, int32(len(b)))
+	h.Write(b)
+	assert.Nil(t, err)
+	wh := h.Sum(nil)
+	nh, _ := blake2b.New(32, make([]byte, 0))
+	nb, err := connection.Read(ctx, fh, 0, int32(len(b)))
+	assert.Nil(t, err)
+	nh.Write(nb)
+	rh := h.Sum(nil)
+	assert.Equal(t, wh, rh)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+
 }
 
 func TestDedupeWriteLargeFile(t *testing.T) {
