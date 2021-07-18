@@ -101,7 +101,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 	} else if fi.Hashtype == spb.Hashtype_UNSUPPORTED {
 		return nil, fmt.Errorf("unsupported hashtype")
 	}
-	log.Debugf("hashhing info %v", fi)
+	log.Debugf("hashing info %v", fi)
 	return &DedupeEngine{
 		openFiles:   make(map[string]*DedupeFile),
 		fileHandles: make(map[int64]*DedupeFile),
