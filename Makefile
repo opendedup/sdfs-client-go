@@ -41,9 +41,11 @@ build:
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
 	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli app/*
-	@mv app/utils_linux.go .
+	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/gentool gentool/*
+	@mv utils/utils_linux.go .
 	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli.exe app/*
-	@mv utils_linux.go app/
+	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/gentool.exe gentool/*
+	@mv utils_linux.go utils/
 
 # Builds sdfscli and installs it to $GOPATH/bin.
 install: build

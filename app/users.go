@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/opendedup/sdfs-client-go/utils"
 )
 
 type arrayFlags []string
@@ -35,7 +36,7 @@ func UserCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	perms := flagSet.String("set-permissions", "", "set permissions for a user")
 	list := flagSet.Bool("list", false, "list users")
 	spwd := flagSet.String("set-password", "", "set password for a user")
-	connection := ParseAndConnect(flagSet)
+	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
 
 	if *list {
@@ -59,7 +60,7 @@ func UserCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Render()
 		return
 
-	} else if IsFlagPassed("add", flagSet) {
+	} else if utils.IsFlagPassed("add", flagSet) {
 		err := connection.AddUser(ctx, *add, *password, *description, myFlags)
 		if err != nil {
 			fmt.Printf("Unable to add user %s error: %v\n", *add, err)
@@ -67,7 +68,7 @@ func UserCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		fmt.Printf("Added user %s \n", *add)
 		return
-	} else if IsFlagPassed("delete", flagSet) {
+	} else if utils.IsFlagPassed("delete", flagSet) {
 		err := connection.DeleteUser(ctx, *del)
 		if err != nil {
 			fmt.Printf("Unable to delete user %s error: %v\n", *del, err)
@@ -75,7 +76,7 @@ func UserCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		fmt.Printf("Deleted user %s \n", *del)
 		return
-	} else if IsFlagPassed("spwd", flagSet) {
+	} else if utils.IsFlagPassed("spwd", flagSet) {
 		err := connection.SetSdfsPassword(ctx, *spwd, *password)
 		if err != nil {
 			fmt.Printf("Unable to delete user %s error: %v\n", *spwd, err)
@@ -83,7 +84,7 @@ func UserCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		fmt.Printf("Deleted user %s \n", *spwd)
 		return
-	} else if IsFlagPassed("set-permissions", flagSet) {
+	} else if utils.IsFlagPassed("set-permissions", flagSet) {
 		err := connection.SetSdfsPermissions(ctx, *perms, myFlags)
 		if err != nil {
 			fmt.Printf("Unable to set permsissions for user %s error: %v\n", *perms, err)

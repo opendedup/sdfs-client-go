@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/opendedup/sdfs-client-go/utils"
 )
 
 //CloudCmd cloud configuration functions for sdfscli
@@ -15,7 +17,7 @@ func CloudCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	df := flagSet.String("download-file", "", "Downloads a file from the cloud to the local sdfs filesystem")
 	dest := flagSet.String("destination", "", "The relative path for destination of the downloaded file")
 	overwrite := flagSet.Bool("overwrite", false, "Overwrite the destination file if it exists")
-	connection := ParseAndConnect(flagSet)
+	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
 
 	if *scv {
@@ -30,7 +32,7 @@ func CloudCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	}
 
-	if IsFlagPassed("download-volume", flagSet) {
+	if utils.IsFlagPassed("download-volume", flagSet) {
 		evt, err := connection.SyncFromCloudVolume(ctx, *vcv, *overwrite)
 		if err != nil {
 			fmt.Printf("Unable to sync cloud volume from %d error: %v\n", *vcv, err)
@@ -39,9 +41,9 @@ func CloudCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Syncing with Cloud Completed %s \n", evt.ShortMsg)
 		return
 	}
-	if IsFlagPassed("download-file", flagSet) {
+	if utils.IsFlagPassed("download-file", flagSet) {
 		_dest := df
-		if IsFlagPassed("destination", flagSet) {
+		if utils.IsFlagPassed("destination", flagSet) {
 			_dest = dest
 		}
 		evt, err := connection.GetCloudFile(ctx, *df, *_dest, *overwrite, true)

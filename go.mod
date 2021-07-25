@@ -3,6 +3,7 @@ module github.com/opendedup/sdfs-client-go
 go 1.13
 
 require (
+	cloud.google.com/go/pubsub v1.13.0 // indirect
 	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
 	github.com/ahmetask/worker v1.3.1
@@ -39,11 +40,9 @@ require (
 	go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e // indirect
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
 	golang.org/x/net v0.0.0-20210521195947-fe42d452be8f // indirect
-	golang.org/x/sys v0.0.0-20210521203332-0cec03c779c1 // indirect
-	google.golang.org/genproto v0.0.0-20210521181308-5ccab8a35a9a // indirect
-	google.golang.org/grpc v1.38.0
+	google.golang.org/grpc v1.39.0
 	google.golang.org/grpc/security/advancedtls v0.0.0-20210628165121-83f9def5feb3 // indirect
-	google.golang.org/protobuf v1.26.0
+	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/ldap.v3 v3.0.3 // indirect
 	gopkg.in/olivere/elastic.v5 v5.0.86 // indirect

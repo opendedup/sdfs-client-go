@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"encoding/json"
@@ -44,7 +44,7 @@ func GetSize(size string) (int64, error) {
 	size = strings.ToUpper(size)
 	tokens := strings.Split(size, " ")
 	if len(tokens) != 2 {
-		return 0, fmt.Errorf("Unable to Parse String. Size must be set as \"<unit> <unit type>\" e.g \"10 TB\"")
+		return 0, fmt.Errorf("unable to parse string. Size must be set as \"<unit> <unit type>\" e.g \"10 TB\"")
 	} else {
 		sz, err := strconv.ParseInt(tokens[0], 10, 64)
 		if err != nil {
@@ -52,23 +52,6 @@ func GetSize(size string) (int64, error) {
 		}
 		return unitmap[tokens[1]] * sz, nil
 	}
-}
-
-//FormatSize Formats Size to String
-func FormatSize(size int64) string {
-	if size <= 0 {
-		return "0 B"
-	}
-	suffixes[0] = "B"
-	suffixes[1] = "KB"
-	suffixes[2] = "MB"
-	suffixes[3] = "GB"
-	suffixes[4] = "TB"
-
-	base := math.Log(float64(size)) / math.Log(1024)
-	getSize := round(math.Pow(1024, base-math.Floor(base)), .5, 2)
-	getSuffix := suffixes[int(math.Floor(base))]
-	return strconv.FormatFloat(getSize, 'f', -1, 64) + " " + string(getSuffix)
 }
 
 //IsFlagPassed Check if the flags passed to flagset
@@ -86,9 +69,8 @@ func IsFlagPassed(name string, flagset *flag.FlagSet) bool {
 func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	pwd := flagSet.String("p", "Password", "The Password for the Volume")
 	u := flagSet.String("u", "admin", "The user to authenticate for this operation")
-	address := flagSet.String("address", "sdfss://localhost:6442", "The Password for the Volume")
+	address := flagSet.String("address", "sdfss://localhost:6442", "The address for the Volume")
 	disableTrust := flagSet.Bool("trust-all", false, "Trust Self Signed TLS Certs")
-	version := flagSet.Bool("version", false, "Get the version number")
 	trustCert := flagSet.Bool("trust-cert", false, "Trust the certificate for url specified. This will download and store the certificate in $HOME/.sdfs/keys")
 	mtls := flagSet.Bool("mtls", false, "Use Mutual TLS. This will use the certs located in $HOME/.sdfs/keys/[client.crt,client.key,ca.crt]"+
 		"unless otherwise specified")
@@ -98,11 +80,6 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	dedupe := flagSet.Bool("dedupe", false, "Enable Client Side Dedupe")
 	flagSet.Parse(os.Args[2:])
 
-	if *version {
-		fmt.Printf("Version : %s\n", Version)
-		fmt.Printf("Build Date: %s\n", BuildDate)
-		os.Exit(0)
-	}
 	if !IsFlagPassed("address", flagSet) {
 		address, err := getAddress()
 		if err != nil {

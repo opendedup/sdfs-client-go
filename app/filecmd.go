@@ -10,6 +10,7 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	"github.com/opendedup/sdfs-client-go/utils"
 )
 
 //FileCmd Configure Volume functions for sdfscli
@@ -31,9 +32,9 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	key := flagSet.String("key", "key", "The Attribute Key")
 	value := flagSet.String("value", "value", "The Attribute Value")
 	fio := flagSet.String("io", ".", "Returns File Dedupe Rates and other IO Attributes")
-	connection := ParseAndConnect(flagSet)
+	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
-	if IsFlagPassed("mkdir", flagSet) {
+	if utils.IsFlagPassed("mkdir", flagSet) {
 		err := connection.MkDirAll(ctx, *mkdir)
 		if err != nil {
 			fmt.Printf("Unable to mkdir: %s error: %v\n", *mkdir, err)
@@ -42,7 +43,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Made directory %s \n", *mkdir)
 		return
 	}
-	if IsFlagPassed("delete", flagSet) {
+	if utils.IsFlagPassed("delete", flagSet) {
 		err := connection.DeleteFile(ctx, *delfile)
 		if err != nil {
 			fmt.Printf("Unable to delete: %s error: %v\n", *delfile, err)
@@ -51,8 +52,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Deleted %s \n", *delfile)
 		return
 	}
-	if IsFlagPassed("rename", flagSet) {
-		if !IsFlagPassed("src", flagSet) || !IsFlagPassed("dst", flagSet) {
+	if utils.IsFlagPassed("rename", flagSet) {
+		if !utils.IsFlagPassed("src", flagSet) || !utils.IsFlagPassed("dst", flagSet) {
 			fmt.Println("--src and dst must be set for rename")
 			os.Exit(1)
 		}
@@ -64,8 +65,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Renamed  %s to %s\n", *src, *dst)
 		return
 	}
-	if IsFlagPassed("snapshot", flagSet) {
-		if !IsFlagPassed("src", flagSet) || !IsFlagPassed("dst", flagSet) {
+	if utils.IsFlagPassed("snapshot", flagSet) {
+		if !utils.IsFlagPassed("src", flagSet) || !utils.IsFlagPassed("dst", flagSet) {
 			fmt.Println("--src and dst must be set for snapshot")
 			os.Exit(1)
 		}
@@ -77,12 +78,12 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Created snapshot of  %s to %s\n", *src, *dst)
 		return
 	}
-	if IsFlagPassed("upload", flagSet) {
-		if !IsFlagPassed("src", flagSet) {
+	if utils.IsFlagPassed("upload", flagSet) {
+		if !utils.IsFlagPassed("src", flagSet) {
 			fmt.Println("--src must be set for upload")
 			os.Exit(1)
 		}
-		if !IsFlagPassed("dst", flagSet) {
+		if !utils.IsFlagPassed("dst", flagSet) {
 			dst = src
 		}
 		_len, err := connection.Upload(ctx, *src, *dst)
@@ -90,8 +91,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			fmt.Printf("Unable to upload: %s to: %s error: %v\n", *src, *dst, err)
 			os.Exit(1)
 		}
-		if IsFlagPassed("preserve", flagSet) {
-			UID, GID, CHMOD, err := GetPermissions(*src)
+		if utils.IsFlagPassed("preserve", flagSet) {
+			UID, GID, CHMOD, err := utils.GetPermissions(*src)
 			if err != nil {
 				fmt.Printf("Unable to get permissions: %s error: %v\n", *src, err)
 			}
@@ -108,12 +109,12 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Uploaded %s, %d bytes written \n", *src, _len)
 		return
 	}
-	if IsFlagPassed("download", flagSet) {
-		if !IsFlagPassed("src", flagSet) || !IsFlagPassed("dst", flagSet) {
+	if utils.IsFlagPassed("download", flagSet) {
+		if !utils.IsFlagPassed("src", flagSet) || !utils.IsFlagPassed("dst", flagSet) {
 			fmt.Println("--src must be set for download")
 			os.Exit(1)
 		}
-		if !IsFlagPassed("dst", flagSet) {
+		if !utils.IsFlagPassed("dst", flagSet) {
 			dst = src
 		}
 		len, err := connection.Download(ctx, *src, *dst)
@@ -124,8 +125,8 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Downloaded %s, %d bytes written \n", *src, len)
 		return
 	}
-	if IsFlagPassed("attribute", flagSet) {
-		if !IsFlagPassed("key", flagSet) && !IsFlagPassed("value", flagSet) {
+	if utils.IsFlagPassed("attribute", flagSet) {
+		if !utils.IsFlagPassed("key", flagSet) && !utils.IsFlagPassed("value", flagSet) {
 			fmt.Println("--key and --value must be set")
 			os.Exit(1)
 		}
@@ -138,7 +139,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Key and Value Set for: %s \n", *sattr)
 		return
 	}
-	if IsFlagPassed("list", flagSet) {
+	if utils.IsFlagPassed("list", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *linfo, "", false, int32(1000000))
 		if err != nil {
@@ -179,7 +180,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Render()
 	}
 
-	if IsFlagPassed("detail", flagSet) {
+	if utils.IsFlagPassed("detail", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *finfo, "", false, int32(1000000))
 		if err != nil {
@@ -243,7 +244,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	}
 
-	if IsFlagPassed("change-listener", flagSet) {
+	if utils.IsFlagPassed("change-listener", flagSet) {
 		c := make(chan *spb.FileMessageResponse)
 		go connection.FileNotification(ctx, c)
 		for {
@@ -309,7 +310,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 	}
 
-	if IsFlagPassed("attributes", flagSet) {
+	if utils.IsFlagPassed("attributes", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *fattr, "", false, int32(1000000))
 		if err != nil {
@@ -335,7 +336,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 	}
 
-	if IsFlagPassed("io", flagSet) {
+	if utils.IsFlagPassed("io", flagSet) {
 
 		_, fInfo, err := connection.ListDir(ctx, *fio, "", false, int32(1000000))
 		if err != nil {
@@ -355,10 +356,10 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				}
 
 				table.Append([]string{"Dedup Rate", fmt.Sprintf("%.2f%%", dedupeRate)})
-				table.Append([]string{"Physical Data Written", FormatSize(io.ActualBytesWritten)})
-				table.Append([]string{"Read Data", FormatSize(io.BytesRead)})
-				table.Append([]string{"Duplicate Data", FormatSize(io.DuplicateBlocks)})
-				table.Append([]string{"Virtual Data Written", FormatSize(io.VirtualBytesWritten)})
+				table.Append([]string{"Physical Data Written", utils.FormatSize(io.ActualBytesWritten)})
+				table.Append([]string{"Read Data", utils.FormatSize(io.BytesRead)})
+				table.Append([]string{"Duplicate Data", utils.FormatSize(io.DuplicateBlocks)})
+				table.Append([]string{"Virtual Data Written", utils.FormatSize(io.VirtualBytesWritten)})
 				table.Append([]string{"Physical Bytes Written", fmt.Sprintf("%d", io.ActualBytesWritten)})
 				table.Append([]string{"Bytes Read", fmt.Sprintf("%d", io.BytesRead)})
 				table.Append([]string{"Duplicate Bytes", fmt.Sprintf("%d", io.DuplicateBlocks)})

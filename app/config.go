@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/opendedup/sdfs-client-go/utils"
 )
 
 //ConfigCmd Configure Volume functions for sdfscli
@@ -30,7 +31,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	gcsecd := flagSet.Bool("gc-schedule", false, "Returns The Garbage Collection Schedule")
 	ccv := flagSet.Bool("connected-volumes", false, "Returns A list of volumes that are using the same storage")
 	levents := flagSet.Bool("events-list", false, "List Events")
-	connection := ParseAndConnect(flagSet)
+	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
 
 	if *cleanstore {
@@ -61,8 +62,8 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		return
 
 	}
-	if IsFlagPassed("dse-cache", flagSet) {
-		size, err := GetSize(*bsize)
+	if utils.IsFlagPassed("dse-cache", flagSet) {
+		size, err := utils.GetSize(*bsize)
 		if err != nil {
 			fmt.Printf("Unable to set dse-cache size for: %v error: %v\n", *bsize, err)
 			os.Exit(1)
@@ -75,8 +76,8 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("%v \n", evt.ShortMsg)
 
 	}
-	if IsFlagPassed("volume-size", flagSet) {
-		size, err := GetSize(*lsize)
+	if utils.IsFlagPassed("volume-size", flagSet) {
+		size, err := utils.GetSize(*lsize)
 		if err != nil {
 			fmt.Printf("Unable to set dse-cache size for: %v error: %v\n", *lsize, err)
 			os.Exit(1)
@@ -86,9 +87,9 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			fmt.Printf("Unable to set dse-cache size for: %v error: %v\n", *lsize, err)
 			os.Exit(1)
 		}
-		fmt.Printf("Volume Size Set to : %s \n", FormatSize(size))
+		fmt.Printf("Volume Size Set to : %s \n", utils.FormatSize(size))
 	}
-	if IsFlagPassed("max-key-age", flagSet) {
+	if utils.IsFlagPassed("max-key-age", flagSet) {
 		err := connection.SetMaxAge(ctx, *kage)
 		if err != nil {
 			fmt.Printf("Unable to set max age to : %v ms, error: %v\n", *kage, err)
@@ -96,7 +97,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		fmt.Printf("Set Max Age To : %v ms\n", *kage)
 	}
-	if IsFlagPassed("read-speed", flagSet) {
+	if utils.IsFlagPassed("read-speed", flagSet) {
 		size, err := strconv.Atoi(*rspeed)
 		if err != nil {
 			fmt.Printf("Unable to set read speed to: %v error: %v\n", *rspeed, err)
@@ -107,10 +108,10 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			fmt.Printf("Unable to set read speed to: %v error: %v\n", *rspeed, err)
 			os.Exit(1)
 		}
-		fmt.Printf("Read Speed Set to : %s \n", FormatSize(int64(size)))
+		fmt.Printf("Read Speed Set to : %s \n", utils.FormatSize(int64(size)))
 	}
 
-	if IsFlagPassed("write-speed", flagSet) {
+	if utils.IsFlagPassed("write-speed", flagSet) {
 		size, err := strconv.Atoi(*wspeed)
 		if err != nil {
 			fmt.Printf("Unable to set write speed to: %v error: %v\n", *wspeed, err)
@@ -121,9 +122,9 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			fmt.Printf("Unable to set write speed to: %v error: %v\n", *wspeed, err)
 			os.Exit(1)
 		}
-		fmt.Printf("Write Speed Set to : %s \n", FormatSize(int64(size)))
+		fmt.Printf("Write Speed Set to : %s \n", utils.FormatSize(int64(size)))
 	}
-	if IsFlagPassed("sync-from-cloud", flagSet) {
+	if utils.IsFlagPassed("sync-from-cloud", flagSet) {
 		evt, err := connection.SyncFromCloudVolume(ctx, *vcv, true)
 		if err != nil {
 			fmt.Printf("Unable to sync cloud volume from %d error: %v\n", *vcv, err)
@@ -132,7 +133,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Syncing with Cloud Completed %s \n", evt.ShortMsg)
 		return
 	}
-	if IsFlagPassed("password", flagSet) {
+	if utils.IsFlagPassed("password", flagSet) {
 		err := connection.SetPassword(ctx, *password)
 		if err != nil {
 			fmt.Printf("Unable to set password error: %v\n", err)
@@ -167,8 +168,8 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				v.Hostname,
 				v.SdfsVersion,
 				lastUpdate,
-				FormatSize(v.Size),
-				FormatSize(v.CompressedSize),
+				utils.FormatSize(v.Size),
+				utils.FormatSize(v.CompressedSize),
 				fmt.Sprintf("%t", v.Local),
 			})
 
@@ -187,13 +188,13 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		table.Append([]string{"Active Threads", fmt.Sprintf("%d", svo.ActiveThreads)})
 		table.Append([]string{"Blocks Stored", fmt.Sprintf("%d", svo.BlocksStored)})
 		table.Append([]string{"CPU Cores", fmt.Sprintf("%f", svo.CpuCores)})
-		table.Append([]string{"Free Memory", FormatSize(int64(svo.FreeMemory))})
-		table.Append([]string{"Free Space", FormatSize(svo.FreeSpace)})
-		table.Append([]string{"Max Blocks", FormatSize(int64(svo.MaxBlocksStored))})
+		table.Append([]string{"Free Memory", utils.FormatSize(int64(svo.FreeMemory))})
+		table.Append([]string{"Free Space", utils.FormatSize(svo.FreeSpace)})
+		table.Append([]string{"Max Blocks", utils.FormatSize(int64(svo.MaxBlocksStored))})
 		table.Append([]string{"Sdfs CPU Load", fmt.Sprintf("%.2f%%", svo.SdfsCpuLoad)})
 		table.Append([]string{"Total CPU Load", fmt.Sprintf("%.2f%%", svo.TotalCpuLoad)})
 		table.Append([]string{"Total Memory", fmt.Sprintf("%f", svo.TotalMemory)})
-		table.Append([]string{"Total Storage", FormatSize(svo.TotalSpace)})
+		table.Append([]string{"Total Storage", utils.FormatSize(svo.TotalSpace)})
 		table.SetAlignment(tablewriter.ALIGN_LEFT)
 		table.Render()
 		return
@@ -236,13 +237,13 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		data := [][]string{
 			{"ID", strconv.FormatInt(volumeInfo.SerialNumber, 10)},
 			{"Name", volumeInfo.Name},
-			{"Capacity Formatted", FormatSize(volumeInfo.Capactity)},
+			{"Capacity Formatted", utils.FormatSize(volumeInfo.Capactity)},
 			{"Capacity Bytes", strconv.FormatInt(volumeInfo.Capactity, 10)},
-			{"Used Formatted", FormatSize(volumeInfo.CurrentSize)},
+			{"Used Formatted", utils.FormatSize(volumeInfo.CurrentSize)},
 			{"Used Bytes", strconv.FormatInt(volumeInfo.CurrentSize, 10)},
-			{"Compressed Formatted", FormatSize(volumeInfo.DseCompSize)},
+			{"Compressed Formatted", utils.FormatSize(volumeInfo.DseCompSize)},
 			{"Compressed Bytes", strconv.FormatInt(volumeInfo.DseCompSize, 10)},
-			{"Duplicate Formatted", FormatSize(volumeInfo.DuplicateBytes)},
+			{"Duplicate Formatted", utils.FormatSize(volumeInfo.DuplicateBytes)},
 			{"Duplicate Bytes", strconv.FormatInt(volumeInfo.DuplicateBytes, 10)},
 			{"Max Percentage Full", fmt.Sprintf("%.2f%%", volumeInfo.MaxPercentageFull*100)},
 			{"Files", strconv.FormatInt(volumeInfo.Files, 10)},
@@ -278,13 +279,13 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			os.Exit(1)
 		}
 		data := [][]string{
-			{"Cache Size Formatted", FormatSize(dInfo.CacheSize)},
+			{"Cache Size Formatted", utils.FormatSize(dInfo.CacheSize)},
 			{"Cache Size Bytes", strconv.FormatInt(dInfo.CacheSize, 10)},
-			{"Max Cache Size Formatted", FormatSize(dInfo.MaxCacheSize)},
+			{"Max Cache Size Formatted", utils.FormatSize(dInfo.MaxCacheSize)},
 			{"Max Cache Size Bytes", strconv.FormatInt(dInfo.MaxCacheSize, 10)},
-			{"Current Size Formatted", FormatSize(dInfo.CurrentSize)},
+			{"Current Size Formatted", utils.FormatSize(dInfo.CurrentSize)},
 			{"Current Size Bytes", strconv.FormatInt(dInfo.CurrentSize, 10)},
-			{"Compressed Size Formatted", FormatSize(dInfo.CompressedSize)},
+			{"Compressed Size Formatted", utils.FormatSize(dInfo.CompressedSize)},
 			{"Compressed Size Bytes", strconv.FormatInt(dInfo.CompressedSize, 10)},
 			{"HashTable Entries", strconv.FormatInt(dInfo.Entries, 10)},
 			{"Max Page Size", strconv.FormatInt(dInfo.PageSize, 10)},
