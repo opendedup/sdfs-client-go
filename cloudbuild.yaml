@@ -2,7 +2,7 @@ steps:
 - name: gcr.io/kaniko-project/executor:latest
   args:
     - --destination=gcr.io/$PROJECT_ID/hybrics-cli:$BRANCH_NAME
-    - --cache=false
+    - --cache=true
     - --cache-ttl=10h
     - --dockerfile=Dockerfile
 - name: gcr.io/cloud-builders/docker
@@ -13,10 +13,10 @@ steps:
   args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-cli:$BRANCH_NAME /go/sdfs-client-go/build/sdfscli.exe /opt/mount/sdfscli.exe']
 - name: gcr.io/cloud-builders/docker
   entrypoint: 'bash'
-  args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-cli:$BRANCH_NAME /go/sdfs-client-go/build/gentool /opt/mount/gentool']
+  args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-cli:$BRANCH_NAME /go/sdfs-client-go/build/gentool /opt/mount/gentool-bin']
 - name: gcr.io/cloud-builders/docker
   entrypoint: 'bash'
-  args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-cli:$BRANCH_NAME /go/sdfs-client-go/build/gentool.exe /opt/mount/gentool.exe']
+  args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-cli:$BRANCH_NAME /go/sdfs-client-go/build/gentool.exe /opt/mount/gentool-bin.exe']
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: 'bash'
   args: [ '-c', "gsutil cp /workspace/sdfscli gs://${_DIST_BUCKET}/sdfscli/sdfscli-$BRANCH_NAME" ]
@@ -25,10 +25,10 @@ steps:
   args: [ '-c', "gsutil cp /workspace/sdfscli.exe gs://${_DIST_BUCKET}/sdfscli/sdfscli-${BRANCH_NAME}.exe" ]
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: 'bash'
-  args: [ '-c', "gsutil cp /workspace/gentool gs://${_DIST_BUCKET}/gentool/gentool-$BRANCH_NAME" ]
+  args: [ '-c', "gsutil cp /workspace/gentool-bin gs://${_DIST_BUCKET}/gentool/gentool-$BRANCH_NAME" ]
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: 'bash'
-  args: [ '-c', "gsutil cp /workspace/gentool.exe gs://${_DIST_BUCKET}/gentool/gentool-${BRANCH_NAME}.exe" ]
+  args: [ '-c', "gsutil cp /workspace/gentool-bin.exe gs://${_DIST_BUCKET}/gentool/gentool-${BRANCH_NAME}.exe" ]
 substitutions:
   _DIST_BUCKET: abucket # default value
 timeout: 10800s
