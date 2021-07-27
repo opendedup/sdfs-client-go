@@ -2,8 +2,10 @@ package utils
 
 import (
 	"context"
+	srand "crypto/rand"
 	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
 	"os"
 	"strconv"
@@ -76,10 +78,33 @@ func FormatSize(size int64) string {
 	return strconv.FormatFloat(getSize, 'f', -1, 64) + " " + string(getSuffix)
 }
 
+func GenerateSecureRandomString(n int) (string, error) {
+	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
+	ret := make([]byte, n)
+	for i := 0; i < n; i++ {
+		num, err := srand.Int(srand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			return "", err
+		}
+		ret[i] = letters[num.Int64()]
+	}
+
+	return string(ret), nil
+}
+
 func WriteLocalFile(parent string, size int64, blocksize int) (*string, *[]byte, error) {
 	rng := rand.New(mt19937.New())
-	rng.Seed(time.Now().UnixNano())
-	fn := fmt.Sprintf("%s/%s", parent, string(randBytes(16, rng)))
+	limit := int64(math.MaxInt64)
+	randInt, err := srand.Int(srand.Reader, big.NewInt(limit))
+	if err != nil {
+		return nil, nil, err
+	}
+	rng.Seed(randInt.Int64())
+	nfn, err := GenerateSecureRandomString(16)
+	if err != nil {
+		return nil, nil, err
+	}
+	fn := fmt.Sprintf("%s/%s", parent, string(nfn))
 	f, err := os.Create(fn)
 	if err != nil {
 		return nil, nil, err
