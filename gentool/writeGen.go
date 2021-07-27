@@ -130,6 +130,7 @@ func WriteCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				wg.Add(1)
 				connection := utils.ParseAndConnect(flagSet)
 				defer connection.CloseConnection(ctx)
+				time.Sleep(10 * time.Millisecond)
 				go writeToSdfs(ctx, &wg, *directory, connection, szBytes)
 			}
 			wg.Wait()
