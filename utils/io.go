@@ -23,13 +23,12 @@ const (
 )
 
 func RandBytesMaskImpr(n int) []byte {
-	source := rand.NewSource(time.Now().UnixNano())
-	generator := rand.New(source)
+	rand.Seed(time.Now().UTC().UnixNano())
 	b := make([]byte, n)
 	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
-	for i, cache, remain := n-1, generator.Int63(), letterIdxMax; i >= 0; {
+	for i, cache, remain := n-1, rand.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
-			cache, remain = generator.Int63(), letterIdxMax
+			cache, remain = rand.Int63(), letterIdxMax
 		}
 		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
 			b[i] = letterBytes[idx]
