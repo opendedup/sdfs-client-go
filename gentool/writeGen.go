@@ -97,7 +97,7 @@ func WriteCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		if utils.IsFlagPassed("pre-run-cmd", flagSet) {
 			sts := time.Now().Unix()
-			cmd := exec.Command(*prewrite)
+			cmd := exec.Command("cmd", "/C", *prewrite)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			err := cmd.Run()
@@ -137,7 +137,7 @@ func WriteCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		if utils.IsFlagPassed("post-run-cmd", flagSet) {
 			sts := time.Now().Unix()
-			cmd := exec.Command(*postwrite)
+			cmd := exec.Command("cmd", "/C", *postwrite)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			err := cmd.Run()
