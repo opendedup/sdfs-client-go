@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/opendedup/sdfs-client-go/api"
+	"github.com/seehuhn/mt19937"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -41,6 +42,24 @@ func RandBytesMaskImpr(n int) []byte {
 	return b
 }
 
+func randBytes(n int, r *rand.Rand) []byte {
+	b := make([]byte, n)
+	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
+	for i, cache, remain := n-1, r.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = r.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return b
+}
+
 func FormatSize(size int64) string {
 	if size <= 0 {
 		return "0 B"
@@ -58,7 +77,9 @@ func FormatSize(size int64) string {
 }
 
 func WriteLocalFile(parent string, size int64, blocksize int) (*string, *[]byte, error) {
-	fn := fmt.Sprintf("%s/%s", parent, string(RandBytesMaskImpr(16)))
+	rng := rand.New(mt19937.New())
+	rng.Seed(time.Now().UnixNano())
+	fn := fmt.Sprintf("%s/%s", parent, string(randBytes(16, rng)))
 	f, err := os.Create(fn)
 	if err != nil {
 		return nil, nil, err
@@ -75,7 +96,7 @@ func WriteLocalFile(parent string, size int64, blocksize int) (*string, *[]byte,
 		if blockSz > int(maxoffset-offset) {
 			blockSz = int(maxoffset - offset)
 		}
-		b := RandBytesMaskImpr(blockSz)
+		b := randBytes(blockSz, rng)
 		_, err = f.WriteAt(b, offset)
 		if err != nil {
 			return nil, nil, err
