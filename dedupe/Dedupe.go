@@ -402,7 +402,9 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 		chunk.mu.Unlock()
 
 		log.Debugf("wrote fpos %d at %d len %d written %d", fpos, bspos, bepos, w)
+		file.mu.Lock()
 		file.cache.Add(fpos, val)
+		file.mu.Unlock()
 		bytesWritten += int32(w)
 		log.Debugf("bytes written %d", bytesWritten)
 		if bspos+bepos > chunk.limit {
