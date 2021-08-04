@@ -367,10 +367,10 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 		if bepos+bspos > int32(n.chunkSize) {
 			bepos = int32(n.chunkSize) - bspos
 		}
+		file.mu.Lock()
 		val, ok := file.cache.Peek(fpos)
 		if !ok {
 			log.Debugf("creating %d", fpos)
-			file.mu.Lock()
 			val, ok = file.cache.Peek(fpos)
 			if !ok {
 				val, ok = file.flushingBuffers[fpos]
@@ -389,8 +389,8 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 				file.cache.Add(fpos, val)
 			}
 
-			file.mu.Unlock()
 		}
+		file.mu.Unlock()
 		chunk := val.(*DedupeBuffer)
 		chunk.mu.Lock()
 		chunk.fileHandle = fileHandle
