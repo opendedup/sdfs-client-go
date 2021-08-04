@@ -161,7 +161,9 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 	file.mu.Lock()
 	file.fileHandles[fileHandle] = true
 	file.mu.Unlock()
+	n.mu.Lock()
 	n.fileHandles[fileHandle] = file
+	n.mu.Unlock()
 	return nil
 }
 
@@ -173,7 +175,6 @@ func (n *DedupeEngine) Sync(fileHandle int64) {
 		file.mu.Lock()
 		defer file.mu.Unlock()
 		m := len(file.fileHandles)
-
 		if m > 0 {
 			var wg sync.WaitGroup
 			for _, k := range file.cache.Keys() {
@@ -233,9 +234,7 @@ func (n *DedupeEngine) SyncFile(fileName string) {
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
-
 		m := len(file.fileHandles)
-
 		if m > 0 {
 			var wg sync.WaitGroup
 			for _, k := range file.cache.Keys() {
@@ -352,7 +351,9 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 
 func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length int32) error {
 	log.Debugf("Writing at offset %d len %d", offset, length)
+	n.mu.Lock()
 	file, ok := n.fileHandles[fileHandle]
+	n.mu.Unlock()
 	if !ok {
 		log.Errorf("filehandle not found %d", fileHandle)
 		return fmt.Errorf("filehandle not found %d", fileHandle)
@@ -456,7 +457,9 @@ func (j *Job) Do() {
 				break
 			} else if err != nil {
 				log.Error(err)
+				j.engine.mu.Lock()
 				file, ok := j.engine.openFiles[j.buffer.fileName]
+				j.engine.mu.Unlock()
 				if ok {
 					file.err = err
 				}
@@ -478,7 +481,9 @@ func (j *Job) Do() {
 		fingers, err := j.engine.CheckHashes(ctx, fingers)
 		if err != nil {
 			log.Error(err)
+			j.engine.mu.Lock()
 			file, ok := j.engine.openFiles[j.buffer.fileName]
+			j.engine.mu.Unlock()
 			if ok {
 				file.err = err
 			}
@@ -488,7 +493,9 @@ func (j *Job) Do() {
 		fingers, err = j.engine.WriteChunks(ctx, fingers, j.buffer.fileHandle)
 		if err != nil {
 			log.Error(err)
+			j.engine.mu.Lock()
 			file, ok := j.engine.openFiles[j.buffer.fileName]
+			j.engine.mu.Unlock()
 			if ok {
 				file.err = err
 			}
@@ -497,13 +504,17 @@ func (j *Job) Do() {
 		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit)
 		if err != nil {
 			log.Error(err)
+			j.engine.mu.Lock()
 			file, ok := j.engine.openFiles[j.buffer.fileName]
+			j.engine.mu.Unlock()
 			if ok {
 				file.err = err
 			}
 			return
 		}
+		j.file.mu.Lock()
 		delete(j.file.flushingBuffers, j.buffer.offset)
+		j.file.mu.Unlock()
 		j.buffer.Flushing = false
 		j.buffer.Flushed = true
 	}
