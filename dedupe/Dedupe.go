@@ -56,6 +56,7 @@ type DedupeBuffer struct {
 
 type DedupeFile struct {
 	mu              sync.Mutex
+	flushLock       sync.Mutex
 	cache           *lru.Cache
 	flushingBuffers map[int64]*DedupeBuffer
 	fileHandles     map[int64]bool
@@ -144,7 +145,9 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 		}
 		onEvicted := func(k interface{}, v interface{}) {
 			buffer := v.(*DedupeBuffer)
+			file.flushLock.Lock()
 			file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
+			file.flushLock.Unlock()
 			buffer.Flushing = true
 			n.pool.Submit(&Job{buffer: buffer, engine: n, file: file})
 
@@ -181,7 +184,9 @@ func (n *DedupeEngine) Sync(fileHandle int64) {
 				v, ok := file.cache.Get(k)
 				if ok {
 					buffer := v.(*DedupeBuffer)
+					file.flushLock.Lock()
 					file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
+					file.flushLock.Unlock()
 					buffer.Flushing = true
 					wg.Add(1)
 					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg, file: file})
@@ -241,7 +246,9 @@ func (n *DedupeEngine) SyncFile(fileName string) {
 				v, ok := file.cache.Get(k)
 				if ok {
 					buffer := v.(*DedupeBuffer)
+					file.flushLock.Lock()
 					file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
+					file.flushLock.Unlock()
 					buffer.Flushing = true
 					wg.Add(1)
 					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg, file: file})
@@ -374,9 +381,13 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 			log.Debugf("creating %d", fpos)
 			val, ok = file.cache.Peek(fpos)
 			if !ok {
+				file.flushLock.Lock()
 				val, ok = file.flushingBuffers[fpos]
+				file.flushLock.Unlock()
 				if ok {
+					file.flushLock.Lock()
 					delete(file.flushingBuffers, fpos)
+					file.flushLock.Unlock()
 					chunk := val.(*DedupeBuffer)
 					chunk.Flushing = false
 					chunk.Flushed = false
@@ -512,9 +523,9 @@ func (j *Job) Do() {
 			}
 			return
 		}
-		j.file.mu.Lock()
+		j.file.flushLock.Lock()
 		delete(j.file.flushingBuffers, j.buffer.offset)
-		j.file.mu.Unlock()
+		j.file.flushLock.Unlock()
 		j.buffer.Flushing = false
 		j.buffer.Flushed = true
 	}
