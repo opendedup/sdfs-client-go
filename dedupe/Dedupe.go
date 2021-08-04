@@ -56,7 +56,7 @@ type DedupeBuffer struct {
 
 type DedupeFile struct {
 	mu              sync.Mutex
-	flushLock       sync.Mutex
+	flushMu         sync.RWMutex
 	cache           *lru.Cache
 	flushingBuffers map[int64]*DedupeBuffer
 	fileHandles     map[int64]bool
@@ -145,9 +145,9 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 		}
 		onEvicted := func(k interface{}, v interface{}) {
 			buffer := v.(*DedupeBuffer)
-			file.flushLock.Lock()
+			file.flushMu.Lock()
 			file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
-			file.flushLock.Unlock()
+			file.flushMu.Unlock()
 			buffer.Flushing = true
 			n.pool.Submit(&Job{buffer: buffer, engine: n, file: file})
 
@@ -164,9 +164,7 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 	file.mu.Lock()
 	file.fileHandles[fileHandle] = true
 	file.mu.Unlock()
-	n.mu.Lock()
 	n.fileHandles[fileHandle] = file
-	n.mu.Unlock()
 	return nil
 }
 
@@ -178,15 +176,16 @@ func (n *DedupeEngine) Sync(fileHandle int64) {
 		file.mu.Lock()
 		defer file.mu.Unlock()
 		m := len(file.fileHandles)
+
 		if m > 0 {
 			var wg sync.WaitGroup
 			for _, k := range file.cache.Keys() {
 				v, ok := file.cache.Get(k)
 				if ok {
 					buffer := v.(*DedupeBuffer)
-					file.flushLock.Lock()
+					file.flushMu.Lock()
 					file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
-					file.flushLock.Unlock()
+					file.flushMu.Unlock()
 					buffer.Flushing = true
 					wg.Add(1)
 					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg, file: file})
@@ -239,16 +238,18 @@ func (n *DedupeEngine) SyncFile(fileName string) {
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
+
 		m := len(file.fileHandles)
+
 		if m > 0 {
 			var wg sync.WaitGroup
 			for _, k := range file.cache.Keys() {
 				v, ok := file.cache.Get(k)
 				if ok {
 					buffer := v.(*DedupeBuffer)
-					file.flushLock.Lock()
+					file.flushMu.Lock()
 					file.flushingBuffers[k.(int64)] = v.(*DedupeBuffer)
-					file.flushLock.Unlock()
+					file.flushMu.Unlock()
 					buffer.Flushing = true
 					wg.Add(1)
 					n.pool.Submit(&Job{buffer: buffer, engine: n, wg: &wg, file: file})
@@ -358,9 +359,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 
 func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length int32) error {
 	log.Debugf("Writing at offset %d len %d", offset, length)
-	n.mu.Lock()
 	file, ok := n.fileHandles[fileHandle]
-	n.mu.Unlock()
 	if !ok {
 		log.Errorf("filehandle not found %d", fileHandle)
 		return fmt.Errorf("filehandle not found %d", fileHandle)
@@ -381,13 +380,13 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 			log.Debugf("creating %d", fpos)
 			val, ok = file.cache.Peek(fpos)
 			if !ok {
-				file.flushLock.Lock()
+				file.flushMu.RLock()
 				val, ok = file.flushingBuffers[fpos]
-				file.flushLock.Unlock()
+				file.flushMu.RUnlock()
 				if ok {
-					file.flushLock.Lock()
+					file.flushMu.Lock()
 					delete(file.flushingBuffers, fpos)
-					file.flushLock.Unlock()
+					file.flushMu.Unlock()
 					chunk := val.(*DedupeBuffer)
 					chunk.Flushing = false
 					chunk.Flushed = false
@@ -523,9 +522,9 @@ func (j *Job) Do() {
 			}
 			return
 		}
-		j.file.flushLock.Lock()
+		j.file.flushMu.Lock()
 		delete(j.file.flushingBuffers, j.buffer.offset)
-		j.file.flushLock.Unlock()
+		j.file.flushMu.Unlock()
 		j.buffer.Flushing = false
 		j.buffer.Flushed = true
 	}
