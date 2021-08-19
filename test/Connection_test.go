@@ -1068,7 +1068,7 @@ func TestMain(m *testing.M) {
 			fmt.Printf("Unable to create docker client %v", err)
 		}
 		portopening := "6442"
-		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000",
+		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "BACKUP_VOLUME=true", "EXTENDED_CMD=--hashtable-rm-threshold=1000",
 			fmt.Sprintf("PASSWORD=%s", password), fmt.Sprintf("REQUIRE_AUTH=%s", "true")}
 		cmd := []string{}
 		_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)

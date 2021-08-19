@@ -732,7 +732,11 @@ func (n *SdfsConnection) ClearCreds() {
 //Stat gets a specific file info
 func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoResponse, error) {
 	if n.DedupeEnabled {
-		n.Dedupe.SyncFile(n.GetAbsPath(path))
+		err := n.Dedupe.SyncFile(n.GetAbsPath(path))
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
 	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path)})
 	if err != nil {
@@ -777,7 +781,11 @@ func (n *SdfsConnection) RemovePrefix(fileName string) string {
 //DeleteFile removes a given file
 func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 	if n.DedupeEnabled {
-		n.Dedupe.CloseFile(n.GetAbsPath(path))
+		err := n.Dedupe.CloseFile(n.GetAbsPath(path))
+		if err != nil {
+			log.Print(err)
+			return err
+		}
 	}
 	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: n.GetAbsPath(path)})
 	if err != nil {
@@ -792,8 +800,16 @@ func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 //CopyExtent creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcStart, dstStart, len int64) (written int64, err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.SyncFile(n.GetAbsPath(src))
-		n.Dedupe.SyncFile(n.GetAbsPath(dst))
+		err := n.Dedupe.SyncFile(n.GetAbsPath(src))
+		if err != nil {
+			log.Print(err)
+			return 0, err
+		}
+		err = n.Dedupe.SyncFile(n.GetAbsPath(dst))
+		if err != nil {
+			log.Print(err)
+			return 0, err
+		}
 	}
 	fi, err := n.fc.CopyExtent(ctx, &spb.CopyExtentRequest{SrcFile: n.GetAbsPath(src), DstFile: n.GetAbsPath(dst), SrcStart: srcStart, DstStart: dstStart, Length: len})
 	if err != nil {
@@ -820,8 +836,16 @@ func (n *SdfsConnection) StatFS(ctx context.Context) (stat *spb.StatFS, err erro
 //Rename renames a file
 func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.CloseFile(n.GetAbsPath(src))
+		err := n.Dedupe.CloseFile(n.GetAbsPath(src))
+		if err != nil {
+			log.Print(err)
+			return err
+		}
 		n.Dedupe.CloseFile(n.GetAbsPath(dst))
+		if err != nil {
+			log.Print(err)
+			return err
+		}
 	}
 	fi, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: n.GetAbsPath(src), Dest: n.GetAbsPath(dst)})
 	if err != nil {
@@ -836,8 +860,16 @@ func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error
 //CopyFile creates a snapshop of a give source to a given destination
 func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnImmediately bool) (event *spb.SDFSEvent, err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.SyncFile(n.GetAbsPath(src))
-		n.Dedupe.SyncFile(n.GetAbsPath(dst))
+		err := n.Dedupe.SyncFile(n.GetAbsPath(src))
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
+		err = n.Dedupe.SyncFile(n.GetAbsPath(dst))
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
 	}
 	fi, err := n.fc.CreateCopy(ctx, &spb.FileSnapshotRequest{
 		Src:  n.GetAbsPath(src),
@@ -1148,7 +1180,11 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 //Read reads data from a given filehandle
 func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, length int32) (data []byte, err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.Sync(fh)
+		err := n.Dedupe.Sync(fh)
+		if err != nil {
+			log.Print(err)
+			return data, err
+		}
 	}
 	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: fh, Start: offset, Len: length})
 	if err != nil {
@@ -1163,7 +1199,11 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 //Release closes a given filehandle
 func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.Close(fh)
+		err := n.Dedupe.Close(fh)
+		if err != nil {
+			log.Print(err)
+			return err
+		}
 	}
 	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
 	if err != nil {
@@ -1546,7 +1586,10 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 //Download downloads a file from SDFS locally
 func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesread int64, err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.SyncFile(n.GetAbsPath(src))
+		err := n.Dedupe.SyncFile(n.GetAbsPath(src))
+		if err != nil {
+			return -1, err
+		}
 	}
 	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(src)})
 	if err != nil {
