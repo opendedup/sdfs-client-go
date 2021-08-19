@@ -172,10 +172,7 @@ func (n *DedupeEngine) Sync(fileHandle int64) error {
 	n.mu.Lock()
 	file, ok := n.fileHandles[fileHandle]
 	n.mu.Unlock()
-	if file.err != nil {
-		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-		return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
-	}
+
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
@@ -197,23 +194,21 @@ func (n *DedupeEngine) Sync(fileHandle int64) error {
 			}
 			wg.Wait()
 		}
+		if file.err != nil {
+			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+		}
 	}
 	return nil
 }
 
 func (n *DedupeEngine) Close(fileHandle int64) error {
-	err := n.Sync(fileHandle)
-	if err != nil {
-		return err
-	}
+	n.Sync(fileHandle)
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	file, ok := n.fileHandles[fileHandle]
-	if file.err != nil {
-		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-		return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
-	}
+
 	if ok {
 		delete(n.fileHandles, fileHandle)
 		file.mu.Lock()
@@ -223,22 +218,21 @@ func (n *DedupeEngine) Close(fileHandle int64) error {
 		if m == 0 {
 			delete(n.openFiles, file.fileName)
 		}
+		if file.err != nil {
+			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+		}
 	}
+
 	return nil
 }
 
 func (n *DedupeEngine) CloseFile(fileName string) error {
-	err := n.SyncFile(fileName)
-	if err != nil {
-		return err
-	}
+	n.SyncFile(fileName)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	file, ok := n.openFiles[fileName]
-	if file.err != nil {
-		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-		return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
-	}
+
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
@@ -246,8 +240,13 @@ func (n *DedupeEngine) CloseFile(fileName string) error {
 			delete(n.fileHandles, k)
 		}
 		delete(n.openFiles, file.fileName)
+		if file.err != nil {
+			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+		}
 
 	}
+
 	return nil
 
 }
@@ -255,10 +254,7 @@ func (n *DedupeEngine) CloseFile(fileName string) error {
 func (n *DedupeEngine) SyncFile(fileName string) error {
 	n.mu.Lock()
 	file, ok := n.openFiles[fileName]
-	if file.err != nil {
-		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-		return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
-	}
+
 	n.mu.Unlock()
 
 	if ok {
@@ -282,6 +278,10 @@ func (n *DedupeEngine) SyncFile(fileName string) error {
 				}
 			}
 			wg.Wait()
+		}
+		if file.err != nil {
+			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
 		}
 	}
 	return nil
