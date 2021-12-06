@@ -41,6 +41,7 @@ type DedupeEngine struct {
 	rabinTable  *rabin.Table
 	pool        *worker.Pool
 	mu          sync.Mutex
+	pVolumeID   int64
 }
 
 type DedupeBuffer struct {
@@ -81,7 +82,7 @@ func (e *SdfsError) Error() string {
 	return fmt.Sprintf("SDFS Error %s %s", e.Err, e.ErrorCode)
 }
 
-func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool) (*DedupeEngine, error) {
+func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, volumeid int64) (*DedupeEngine, error) {
 	log.Out = os.Stdout
 	if debug {
 		log.SetLevel(logrus.DebugLevel)
@@ -91,7 +92,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 	//Start worker pool
 	pool.Start()
 	hc := spb.NewStorageServiceClient(connection)
-	fi, err := hc.HashingInfo(ctx, &spb.HashingInfoRequest{})
+	fi, err := hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: volumeid})
 	if err != nil {
 		log.Errorf("unable to get hashinginfo %v", err)
 		return nil, err
@@ -117,11 +118,12 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		maxLen:      fi.MaxSegmentSize,
 		rabinTable:  rabin.NewTable(uint64(fi.PolyNumber), int(fi.WindowSize)),
 		pool:        pool,
+		pVolumeID:   volumeid,
 	}, nil
 }
 
 func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoResponse, error) {
-	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{})
+	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -288,7 +290,7 @@ func (n *DedupeEngine) SyncFile(fileName string) error {
 }
 
 func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*Finger, error) {
-	chreq := &spb.CheckHashesRequest{}
+	chreq := &spb.CheckHashesRequest{PvolumeID: n.pVolumeID}
 	hes := make([][]byte, len(fingers))
 	for i := 0; i < len(fingers); i++ {
 		hes[i] = fingers[i].hash
@@ -314,7 +316,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 
 func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64) ([]*Finger, error) {
 	ces := make([]*spb.ChunkEntry, len(fingers))
-	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle}
+	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
 			ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data}
@@ -369,7 +371,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		}
 	}
 	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup}
-	sr := &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation}
+	sr := &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
 	log.Debugf("writing %v", sr)
 	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {

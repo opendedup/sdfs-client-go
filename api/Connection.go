@@ -52,6 +52,7 @@ type SdfsConnection struct {
 	DedupeEnabled   bool
 	SdfsInterceptor *SdfsInterceptor
 	Path            string
+	volumeid        int64
 }
 
 // A Credentials Struct
@@ -503,7 +504,7 @@ func getCert(address string) (*x509.Certificate, error) {
 }
 
 //NewConnection Created a new connection given a path
-func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
+func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnection, error) {
 	var address string
 	var useSSL bool
 	u, err := xnet.ParseURL(path)
@@ -664,10 +665,10 @@ func NewConnection(path string, dedupeEnabled bool) (*SdfsConnection, error) {
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 	uc := spb.NewSdfsUserServiceClient(conn)
-	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc, SdfsInterceptor: interceptor, Path: zpath}
+	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc, SdfsInterceptor: interceptor, Path: zpath, volumeid: volumeid}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, volumeid)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
@@ -688,7 +689,7 @@ func (n *SdfsConnection) GetAbsPath(path string) string {
 
 //RmDir removes a given directory
 func (n *SdfsConnection) RmDir(ctx context.Context, path string) error {
-	rc, err := n.fc.RmDir(ctx, &spb.RmDirRequest{Path: n.GetAbsPath(path)})
+	rc, err := n.fc.RmDir(ctx, &spb.RmDirRequest{Path: n.GetAbsPath(path), PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -701,7 +702,7 @@ func (n *SdfsConnection) RmDir(ctx context.Context, path string) error {
 
 //MkDir makes a given directory
 func (n *SdfsConnection) MkDir(ctx context.Context, path string, mode int32) error {
-	rc, err := n.fc.MkDir(ctx, &spb.MkDirRequest{Path: n.GetAbsPath(path), Mode: mode})
+	rc, err := n.fc.MkDir(ctx, &spb.MkDirRequest{Path: n.GetAbsPath(path), Mode: mode, PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -714,7 +715,7 @@ func (n *SdfsConnection) MkDir(ctx context.Context, path string, mode int32) err
 
 //MkDirAll makes a directory and all parent directories
 func (n *SdfsConnection) MkDirAll(ctx context.Context, path string) error {
-	rc, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: n.GetAbsPath(path)})
+	rc, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: n.GetAbsPath(path), PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -738,7 +739,7 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 			return nil, err
 		}
 	}
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path)})
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path), PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -751,7 +752,8 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 
 //ListDir lists a directory
 func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compact bool, returnsz int32) (string, []*spb.FileInfoResponse, error) {
-	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path), NumberOfFiles: returnsz, Compact: false, ListGuid: marker})
+	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path),
+		NumberOfFiles: returnsz, Compact: false, ListGuid: marker, PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return "", nil, err
@@ -787,7 +789,7 @@ func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 			return err
 		}
 	}
-	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: n.GetAbsPath(path)})
+	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: n.GetAbsPath(path), PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -811,7 +813,9 @@ func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcSta
 			return 0, err
 		}
 	}
-	fi, err := n.fc.CopyExtent(ctx, &spb.CopyExtentRequest{SrcFile: n.GetAbsPath(src), DstFile: n.GetAbsPath(dst), SrcStart: srcStart, DstStart: dstStart, Length: len})
+	fi, err := n.fc.CopyExtent(ctx, &spb.CopyExtentRequest{SrcFile: n.GetAbsPath(src),
+		DstFile: n.GetAbsPath(dst), SrcStart: srcStart, DstStart: dstStart,
+		Length: len, PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return 0, err
@@ -823,7 +827,7 @@ func (n *SdfsConnection) CopyExtent(ctx context.Context, src, dst string, srcSta
 
 //StatFS Gets Filesystem in Typical OS Stat Format
 func (n *SdfsConnection) StatFS(ctx context.Context) (stat *spb.StatFS, err error) {
-	fi, err := n.fc.StatFS(ctx, &spb.StatFSRequest{})
+	fi, err := n.fc.StatFS(ctx, &spb.StatFSRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return stat, err
@@ -847,7 +851,7 @@ func (n *SdfsConnection) Rename(ctx context.Context, src, dst string) (err error
 			return err
 		}
 	}
-	fi, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: n.GetAbsPath(src), Dest: n.GetAbsPath(dst)})
+	fi, err := n.fc.Rename(ctx, &spb.FileRenameRequest{Src: n.GetAbsPath(src), Dest: n.GetAbsPath(dst), PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -872,8 +876,9 @@ func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnIm
 		}
 	}
 	fi, err := n.fc.CreateCopy(ctx, &spb.FileSnapshotRequest{
-		Src:  n.GetAbsPath(src),
-		Dest: n.GetAbsPath(dst),
+		Src:       n.GetAbsPath(src),
+		Dest:      n.GetAbsPath(dst),
+		PvolumeID: n.volumeid,
 	})
 	if err != nil {
 		log.Print(err)
@@ -890,7 +895,7 @@ func (n *SdfsConnection) CopyFile(ctx context.Context, src, dst string, returnIm
 
 //GetEvent returns the event struct for a specific event id
 func (n *SdfsConnection) GetEvent(ctx context.Context, eventid string) (*spb.SDFSEvent, error) {
-	fi, err := n.evt.GetEvent(ctx, &spb.SDFSEventRequest{Uuid: eventid})
+	fi, err := n.evt.GetEvent(ctx, &spb.SDFSEventRequest{Uuid: eventid, PvolumeID: n.volumeid})
 	if err != nil {
 		log.Errorf("unable to get id %s, error: %v \n", eventid, err)
 		return nil, err
@@ -902,7 +907,7 @@ func (n *SdfsConnection) GetEvent(ctx context.Context, eventid string) (*spb.SDF
 
 //ListEvents lists all the events that have occured
 func (n *SdfsConnection) ListEvents(ctx context.Context) ([]*spb.SDFSEvent, error) {
-	fi, err := n.evt.ListEvents(ctx, &spb.SDFSEventListRequest{})
+	fi, err := n.evt.ListEvents(ctx, &spb.SDFSEventListRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Errorf("unable to list events %v \n", err)
 		return nil, err
@@ -914,7 +919,7 @@ func (n *SdfsConnection) ListEvents(ctx context.Context) ([]*spb.SDFSEvent, erro
 
 //WaitForEvent waits for events to finish and then returns the end event.
 func (n *SdfsConnection) WaitForEvent(ctx context.Context, eventid string) (*spb.SDFSEvent, error) {
-	stream, err := n.evt.SubscribeEvent(ctx, &spb.SDFSEventRequest{Uuid: eventid})
+	stream, err := n.evt.SubscribeEvent(ctx, &spb.SDFSEventRequest{Uuid: eventid, PvolumeID: n.volumeid})
 	if err != nil {
 
 		log.Print(err)
@@ -942,7 +947,7 @@ func (n *SdfsConnection) WaitForEvent(ctx context.Context, eventid string) (*spb
 
 //FileNotification notifies over a channel for all events when a file is downloaded for Sync
 func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *spb.FileMessageResponse) error {
-	stream, err := n.fc.FileNotification(ctx, &spb.SyncNotificationSubscription{Uid: uuid.New().String()})
+	stream, err := n.fc.FileNotification(ctx, &spb.SyncNotificationSubscription{Uid: uuid.New().String(), PvolumeID: n.volumeid})
 	if err != nil {
 
 		log.Print(err)
@@ -967,7 +972,7 @@ func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *sp
 }
 
 func (n *SdfsConnection) SetMaxAge(ctx context.Context, maxAge int64) error {
-	fi, err := n.vc.SetMaxAge(ctx, &spb.SetMaxAgeRequest{MaxAge: maxAge})
+	fi, err := n.vc.SetMaxAge(ctx, &spb.SetMaxAgeRequest{PvolumeID: n.volumeid, MaxAge: maxAge})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -979,7 +984,7 @@ func (n *SdfsConnection) SetMaxAge(ctx context.Context, maxAge int64) error {
 
 //GetXAttrSize gets the list size for attributes. This is useful for a fuse implementation
 func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path, key string) (int32, error) {
-	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: n.GetAbsPath(path), Attr: key})
+	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: n.GetAbsPath(path), PvolumeID: n.volumeid, Attr: key})
 	if err != nil {
 		log.Print(err)
 		return 0, err
@@ -991,7 +996,7 @@ func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path, key string) (in
 
 //Fsync Syncs an sdfs file to underlying storage
 func (n *SdfsConnection) Fsync(ctx context.Context, path string, fh int64) error {
-	fi, err := n.fc.Fsync(ctx, &spb.FsyncRequest{Path: n.GetAbsPath(path), Fh: fh})
+	fi, err := n.fc.Fsync(ctx, &spb.FsyncRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Fh: fh})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1003,7 +1008,7 @@ func (n *SdfsConnection) Fsync(ctx context.Context, path string, fh int64) error
 
 //SetXAttr sets a specific key value pair for a given file
 func (n *SdfsConnection) SetXAttr(ctx context.Context, key, value, path string) error {
-	fi, err := n.fc.SetXAttr(ctx, &spb.SetXAttrRequest{Path: n.GetAbsPath(path), Attr: key, Value: value})
+	fi, err := n.fc.SetXAttr(ctx, &spb.SetXAttrRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Attr: key, Value: value})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1015,7 +1020,7 @@ func (n *SdfsConnection) SetXAttr(ctx context.Context, key, value, path string) 
 
 //RemoveXAttr removes a given key for a file
 func (n *SdfsConnection) RemoveXAttr(ctx context.Context, key, path string) error {
-	fi, err := n.fc.RemoveXAttr(ctx, &spb.RemoveXAttrRequest{Path: n.GetAbsPath(path), Attr: key})
+	fi, err := n.fc.RemoveXAttr(ctx, &spb.RemoveXAttrRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Attr: key})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1027,7 +1032,7 @@ func (n *SdfsConnection) RemoveXAttr(ctx context.Context, key, path string) erro
 
 //GetXAttr retrieves a value for a given attribute and file
 func (n *SdfsConnection) GetXAttr(ctx context.Context, key, path string) (value string, err error) {
-	fi, err := n.fc.GetXAttr(ctx, &spb.GetXAttrRequest{Path: n.GetAbsPath(path), Attr: key})
+	fi, err := n.fc.GetXAttr(ctx, &spb.GetXAttrRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Attr: key})
 	if err != nil {
 		log.Print(err)
 		return value, err
@@ -1039,7 +1044,7 @@ func (n *SdfsConnection) GetXAttr(ctx context.Context, key, path string) (value 
 
 //Utime sets the utime for a given file
 func (n *SdfsConnection) Utime(ctx context.Context, path string, atime, mtime int64) (err error) {
-	fi, err := n.fc.Utime(ctx, &spb.UtimeRequest{Path: n.GetAbsPath(path), Atime: atime, Mtime: mtime})
+	fi, err := n.fc.Utime(ctx, &spb.UtimeRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Atime: atime, Mtime: mtime})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1054,7 +1059,7 @@ func (n *SdfsConnection) Truncate(ctx context.Context, path string, length int64
 	if n.DedupeEnabled {
 		n.Dedupe.SyncFile(n.GetAbsPath(path))
 	}
-	fi, err := n.fc.Truncate(ctx, &spb.TruncateRequest{Path: n.GetAbsPath(path), Length: length})
+	fi, err := n.fc.Truncate(ctx, &spb.TruncateRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Length: length})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1068,7 +1073,7 @@ func (n *SdfsConnection) Truncate(ctx context.Context, path string, length int64
 func (n *SdfsConnection) SymLink(ctx context.Context, src, dst string) (err error) {
 	src = n.GetAbsPath(src)
 	log.Debugf("symlink %s %s", src, dst)
-	fi, err := n.fc.SymLink(ctx, &spb.SymLinkRequest{From: src, To: n.GetAbsPath(dst)})
+	fi, err := n.fc.SymLink(ctx, &spb.SymLinkRequest{PvolumeID: n.volumeid, From: src, To: n.GetAbsPath(dst)})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1080,7 +1085,7 @@ func (n *SdfsConnection) SymLink(ctx context.Context, src, dst string) (err erro
 
 //ReadLink reads a symlink for a given source
 func (n *SdfsConnection) ReadLink(ctx context.Context, path string) (linkpath string, err error) {
-	fi, err := n.fc.ReadLink(ctx, &spb.LinkRequest{Path: n.GetAbsPath(path)})
+	fi, err := n.fc.ReadLink(ctx, &spb.LinkRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path)})
 	if err != nil {
 		log.Print(err)
 		return linkpath, err
@@ -1096,7 +1101,7 @@ func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.St
 	if n.DedupeEnabled {
 		n.Dedupe.SyncFile(n.GetAbsPath(path))
 	}
-	fi, err := n.fc.GetAttr(ctx, &spb.StatRequest{Path: n.GetAbsPath(path)})
+	fi, err := n.fc.GetAttr(ctx, &spb.StatRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path)})
 	if err != nil {
 		log.Print(err)
 		return stat, err
@@ -1111,7 +1116,7 @@ func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err 
 	if n.DedupeEnabled {
 		n.Dedupe.Sync(fh)
 	}
-	fi, err := n.fc.Flush(ctx, &spb.FlushRequest{Path: n.GetAbsPath(path), Fd: fh})
+	fi, err := n.fc.Flush(ctx, &spb.FlushRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Fd: fh})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1123,7 +1128,7 @@ func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err 
 
 //Chown sets ownership of the requested file to the requested owner
 func (n *SdfsConnection) Chown(ctx context.Context, path string, gid int32, uid int32) (err error) {
-	fi, err := n.fc.Chown(ctx, &spb.ChownRequest{Path: n.GetAbsPath(path), Gid: gid, Uid: uid})
+	fi, err := n.fc.Chown(ctx, &spb.ChownRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Gid: gid, Uid: uid})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1135,7 +1140,7 @@ func (n *SdfsConnection) Chown(ctx context.Context, path string, gid int32, uid 
 
 //Chmod sets permission of the requested file to the requested permissions
 func (n *SdfsConnection) Chmod(ctx context.Context, path string, mode int32) (err error) {
-	fi, err := n.fc.Chmod(ctx, &spb.ChmodRequest{Path: n.GetAbsPath(path), Mode: mode})
+	fi, err := n.fc.Chmod(ctx, &spb.ChmodRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Mode: mode})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1166,7 +1171,7 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	if n.DedupeEnabled {
 		return n.Dedupe.Write(fh, offset, data, length)
 	} else {
-		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{FileHandle: fh, Data: data, Len: length, Start: offset})
+		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
 		if err != nil {
 			log.Print(err)
 			return err
@@ -1186,7 +1191,7 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 			return data, err
 		}
 	}
-	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: fh, Start: offset, Len: length})
+	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{PvolumeID: n.volumeid, FileHandle: fh, Start: offset, Len: length})
 	if err != nil {
 		log.Print(err)
 		return data, err
@@ -1205,7 +1210,7 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 			return err
 		}
 	}
-	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: fh})
+	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{PvolumeID: n.volumeid, FileHandle: fh})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1218,7 +1223,7 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 
 //MkNod makes a given file
 func (n *SdfsConnection) MkNod(ctx context.Context, path string, mode, rdev int32) (err error) {
-	fi, err := n.fc.Mknod(ctx, &spb.MkNodRequest{Path: n.GetAbsPath(path), Mode: mode, Rdev: rdev})
+	fi, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Mode: mode, Rdev: rdev})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1230,7 +1235,7 @@ func (n *SdfsConnection) MkNod(ctx context.Context, path string, mode, rdev int3
 
 //Open opens a given file
 func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh int64, err error) {
-	fi, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: n.GetAbsPath(path), Flags: flags})
+	fi, err := n.fc.Open(ctx, &spb.FileOpenRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), Flags: flags})
 	if err != nil {
 		log.Print(err)
 		return fh, err
@@ -1245,7 +1250,7 @@ func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh
 
 //FileExists checks if a file Exists given a path.
 func (n *SdfsConnection) FileExists(ctx context.Context, path string) (exists bool, err error) {
-	fi, err := n.fc.FileExists(ctx, &spb.FileExistsRequest{Path: n.GetAbsPath(path)})
+	fi, err := n.fc.FileExists(ctx, &spb.FileExistsRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path)})
 	if err != nil {
 		log.Print(err)
 		return false, err
@@ -1257,7 +1262,7 @@ func (n *SdfsConnection) FileExists(ctx context.Context, path string) (exists bo
 
 //SetUserMetaData sets an array of key value pairs for a given path
 func (n *SdfsConnection) SetUserMetaData(ctx context.Context, path string, fileAttributes []*spb.FileAttributes) (err error) {
-	fi, err := n.fc.SetUserMetaData(ctx, &spb.SetUserMetaDataRequest{Path: n.GetAbsPath(path), FileAttributes: fileAttributes})
+	fi, err := n.fc.SetUserMetaData(ctx, &spb.SetUserMetaDataRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(path), FileAttributes: fileAttributes})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1269,7 +1274,7 @@ func (n *SdfsConnection) SetUserMetaData(ctx context.Context, path string, fileA
 
 //GetCloudFile hydrates a given file from object storage to the local filesystem. The source does not have to be in the path
 func (n *SdfsConnection) GetCloudFile(ctx context.Context, path, dst string, overwrite, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.fc.GetCloudFile(ctx, &spb.GetCloudFileRequest{File: n.GetAbsPath(path), Dstfile: n.GetAbsPath(dst), Overwrite: overwrite, Changeid: uuid.New().String()})
+	fi, err := n.fc.GetCloudFile(ctx, &spb.GetCloudFileRequest{PvolumeID: n.volumeid, File: n.GetAbsPath(path), Dstfile: n.GetAbsPath(dst), Overwrite: overwrite, Changeid: uuid.New().String()})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1285,7 +1290,7 @@ func (n *SdfsConnection) GetCloudFile(ctx context.Context, path, dst string, ove
 
 //GetCloudMetaFile downloads the metadata for given file from object storage but does not hydrate it into the local hashtable. The source does not have to be in the path
 func (n *SdfsConnection) GetCloudMetaFile(ctx context.Context, path, dst string, overwrite, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.fc.GetCloudMetaFile(ctx, &spb.GetCloudFileRequest{File: path, Dstfile: n.GetAbsPath(dst), Overwrite: overwrite, Changeid: uuid.New().String()})
+	fi, err := n.fc.GetCloudMetaFile(ctx, &spb.GetCloudFileRequest{PvolumeID: n.volumeid, File: path, Dstfile: n.GetAbsPath(dst), Overwrite: overwrite, Changeid: uuid.New().String()})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1301,7 +1306,7 @@ func (n *SdfsConnection) GetCloudMetaFile(ctx context.Context, path, dst string,
 
 //GetVolumeInfo returns the volume info
 func (n *SdfsConnection) GetVolumeInfo(ctx context.Context) (volumeInfo *spb.VolumeInfoResponse, err error) {
-	fi, err := n.vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{})
+	fi, err := n.vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1312,7 +1317,7 @@ func (n *SdfsConnection) GetVolumeInfo(ctx context.Context) (volumeInfo *spb.Vol
 
 //ShutdownVolume unmounts the given volume
 func (n *SdfsConnection) ShutdownVolume(ctx context.Context) (err error) {
-	_, err = n.vc.ShutdownVolume(ctx, &spb.ShutdownRequest{})
+	_, err = n.vc.ShutdownVolume(ctx, &spb.ShutdownRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		//log.Print(err)
 		return err
@@ -1322,7 +1327,7 @@ func (n *SdfsConnection) ShutdownVolume(ctx context.Context) (err error) {
 
 //CleanStore does garbage collection on the volume
 func (n *SdfsConnection) CleanStore(ctx context.Context, compact, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.vc.CleanStore(ctx, &spb.CleanStoreRequest{Compact: compact})
+	fi, err := n.vc.CleanStore(ctx, &spb.CleanStoreRequest{PvolumeID: n.volumeid, Compact: compact})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1338,7 +1343,7 @@ func (n *SdfsConnection) CleanStore(ctx context.Context, compact, waitForComplet
 
 //DeleteCloudVolume deletes a volume that is no longer in use
 func (n *SdfsConnection) DeleteCloudVolume(ctx context.Context, volumeid int64, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.vc.DeleteCloudVolume(ctx, &spb.DeleteCloudVolumeRequest{Volumeid: volumeid})
+	fi, err := n.vc.DeleteCloudVolume(ctx, &spb.DeleteCloudVolumeRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1354,7 +1359,7 @@ func (n *SdfsConnection) DeleteCloudVolume(ctx context.Context, volumeid int64, 
 
 //DSEInfo get dedupe storage info
 func (n *SdfsConnection) DSEInfo(ctx context.Context) (info *spb.DSEInfo, err error) {
-	fi, err := n.vc.DSEInfo(ctx, &spb.DSERequest{})
+	fi, err := n.vc.DSEInfo(ctx, &spb.DSERequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1366,7 +1371,7 @@ func (n *SdfsConnection) DSEInfo(ctx context.Context) (info *spb.DSEInfo, err er
 
 //SystemInfo returns system info
 func (n *SdfsConnection) SystemInfo(ctx context.Context) (info *spb.SystemInfo, err error) {
-	fi, err := n.vc.SystemInfo(ctx, &spb.SystemInfoRequest{})
+	fi, err := n.vc.SystemInfo(ctx, &spb.SystemInfoRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1378,7 +1383,7 @@ func (n *SdfsConnection) SystemInfo(ctx context.Context) (info *spb.SystemInfo, 
 
 //SetVolumeCapacity sets the logical size of the volume
 func (n *SdfsConnection) SetVolumeCapacity(ctx context.Context, size int64) (err error) {
-	fi, err := n.vc.SetVolumeCapacity(ctx, &spb.SetVolumeCapacityRequest{Size: size})
+	fi, err := n.vc.SetVolumeCapacity(ctx, &spb.SetVolumeCapacityRequest{PvolumeID: n.volumeid, Size: size})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1390,7 +1395,7 @@ func (n *SdfsConnection) SetVolumeCapacity(ctx context.Context, size int64) (err
 
 //GetConnectedVolumes returns all the volumes sharing the same storage
 func (n *SdfsConnection) GetConnectedVolumes(ctx context.Context) (info []*spb.ConnectedVolumeInfo, err error) {
-	fi, err := n.vc.GetConnectedVolumes(ctx, &spb.CloudVolumesRequest{})
+	fi, err := n.vc.GetConnectedVolumes(ctx, &spb.CloudVolumesRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1402,7 +1407,7 @@ func (n *SdfsConnection) GetConnectedVolumes(ctx context.Context) (info []*spb.C
 
 //GetGCSchedule returns the current Garbage collection schedule for the volume
 func (n *SdfsConnection) GetGCSchedule(ctx context.Context) (schedule string, err error) {
-	fi, err := n.vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{})
+	fi, err := n.vc.GetGCSchedule(ctx, &spb.GCScheduleRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return schedule, err
@@ -1414,7 +1419,7 @@ func (n *SdfsConnection) GetGCSchedule(ctx context.Context) (schedule string, er
 
 //SetCacheSize does garbage collection on the volume
 func (n *SdfsConnection) SetCacheSize(ctx context.Context, size int64, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.vc.SetCacheSize(ctx, &spb.SetCacheSizeRequest{CacheSize: size})
+	fi, err := n.vc.SetCacheSize(ctx, &spb.SetCacheSizeRequest{PvolumeID: n.volumeid, CacheSize: size})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1430,7 +1435,7 @@ func (n *SdfsConnection) SetCacheSize(ctx context.Context, size int64, waitForCo
 
 //SetPassword sets the password for the volume
 func (n *SdfsConnection) SetPassword(ctx context.Context, password string) (err error) {
-	fi, err := n.vc.SetPassword(ctx, &spb.SetPasswordRequest{Password: password})
+	fi, err := n.vc.SetPassword(ctx, &spb.SetPasswordRequest{PvolumeID: n.volumeid, Password: password})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1442,7 +1447,7 @@ func (n *SdfsConnection) SetPassword(ctx context.Context, password string) (err 
 
 //SetReadSpeed sets the read speed in Kb/s
 func (n *SdfsConnection) SetReadSpeed(ctx context.Context, speed int32) (err error) {
-	fi, err := n.vc.SetReadSpeed(ctx, &spb.SpeedRequest{RequestedSpeed: speed})
+	fi, err := n.vc.SetReadSpeed(ctx, &spb.SpeedRequest{PvolumeID: n.volumeid, RequestedSpeed: speed})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1456,7 +1461,7 @@ func (n *SdfsConnection) SetReadSpeed(ctx context.Context, speed int32) (err err
 
 //SetWriteSpeed sets the write speed in Kb/s
 func (n *SdfsConnection) SetWriteSpeed(ctx context.Context, speed int32) (err error) {
-	fi, err := n.vc.SetWriteSpeed(ctx, &spb.SpeedRequest{RequestedSpeed: speed})
+	fi, err := n.vc.SetWriteSpeed(ctx, &spb.SpeedRequest{PvolumeID: n.volumeid, RequestedSpeed: speed})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1470,7 +1475,7 @@ func (n *SdfsConnection) SetWriteSpeed(ctx context.Context, speed int32) (err er
 
 //SyncFromCloudVolume syncs the current volume from a give volume id
 func (n *SdfsConnection) SyncFromCloudVolume(ctx context.Context, volumeid int64, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.vc.SyncFromCloudVolume(ctx, &spb.SyncFromVolRequest{Volumeid: volumeid})
+	fi, err := n.vc.SyncFromCloudVolume(ctx, &spb.SyncFromVolRequest{PvolumeID: n.volumeid, Volumeid: volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1486,7 +1491,7 @@ func (n *SdfsConnection) SyncFromCloudVolume(ctx context.Context, volumeid int64
 
 //SyncCloudVolume syncs the current volume from all instances in the cloud
 func (n *SdfsConnection) SyncCloudVolume(ctx context.Context, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.vc.SyncCloudVolume(ctx, &spb.SyncVolRequest{})
+	fi, err := n.vc.SyncCloudVolume(ctx, &spb.SyncVolRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1514,8 +1519,8 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
-	n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: sdfsTempFolder})
-	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{Path: tmpname})
+	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.volumeid, Path: sdfsTempFolder})
+	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.volumeid, Path: tmpname})
 	if err != nil {
 		return -1, err
 	} else if mkf.GetErrorCode() > 0 {
@@ -1561,7 +1566,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	n.Release(ctx, fh)
 	dir := path.Dir(n.GetAbsPath(dst))
 	if dir != "" {
-		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{Path: dir})
+		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.volumeid, Path: dir})
 		if err != nil {
 			return -1, err
 		} else if mkd.GetErrorCode() > 0 && mkd.GetErrorCode() != spb.ErrorCodes_EEXIST {
@@ -1591,19 +1596,19 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 			return -1, err
 		}
 	}
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(src)})
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{PvolumeID: n.volumeid, FileName: n.GetAbsPath(src)})
 	if err != nil {
 		return -1, err
 	} else if fi.GetErrorCode() > 0 {
 		return -1, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	rd, err := n.fc.Open(ctx, &spb.FileOpenRequest{Path: n.GetAbsPath(src)})
+	rd, err := n.fc.Open(ctx, &spb.FileOpenRequest{PvolumeID: n.volumeid, Path: n.GetAbsPath(src)})
 	if err != nil {
 		return -1, err
 	} else if rd.GetErrorCode() > 0 {
 		return -1, &SdfsError{Err: rd.GetError(), ErrorCode: rd.GetErrorCode()}
 	}
-	defer n.fc.Release(ctx, &spb.FileCloseRequest{FileHandle: rd.GetFileHandle()})
+	defer n.fc.Release(ctx, &spb.FileCloseRequest{PvolumeID: n.volumeid, FileHandle: rd.GetFileHandle()})
 	var read int64 = 0
 	var blocksize int32 = 128 * 1024
 	var length = fi.GetResponse()[0].Size
@@ -1620,7 +1625,7 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 			break
 		}
 		//log(" reading at  %d len %d\n", read, blocksize)
-		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{FileHandle: rd.GetFileHandle(), Len: blocksize, Start: read})
+		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{PvolumeID: n.volumeid, FileHandle: rd.GetFileHandle(), Len: blocksize, Start: read})
 		if err != nil {
 
 			return -1, err
@@ -1682,7 +1687,7 @@ func parsePermissions(permissions []string) *spb.SdfsPermissions {
 
 func (n *SdfsConnection) AddUser(ctx context.Context, user, password, description string, permissions []string) error {
 
-	fi, err := n.us.AddUser(ctx, &spb.AddUserRequest{Permissions: parsePermissions(permissions), User: user, Password: password, Description: description})
+	fi, err := n.us.AddUser(ctx, &spb.AddUserRequest{PvolumeID: n.volumeid, Permissions: parsePermissions(permissions), User: user, Password: password, Description: description})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1694,7 +1699,7 @@ func (n *SdfsConnection) AddUser(ctx context.Context, user, password, descriptio
 
 func (n *SdfsConnection) ListUsers(ctx context.Context) ([]*spb.SdfsUser, error) {
 
-	fi, err := n.us.ListUsers(ctx, &spb.ListUsersRequest{})
+	fi, err := n.us.ListUsers(ctx, &spb.ListUsersRequest{PvolumeID: n.volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -1707,7 +1712,7 @@ func (n *SdfsConnection) ListUsers(ctx context.Context) ([]*spb.SdfsUser, error)
 
 func (n *SdfsConnection) SetSdfsPassword(ctx context.Context, user, password string) error {
 
-	fi, err := n.us.SetSdfsPassword(ctx, &spb.SetUserPasswordRequest{User: user, Password: password})
+	fi, err := n.us.SetSdfsPassword(ctx, &spb.SetUserPasswordRequest{PvolumeID: n.volumeid, User: user, Password: password})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1719,7 +1724,7 @@ func (n *SdfsConnection) SetSdfsPassword(ctx context.Context, user, password str
 
 func (n *SdfsConnection) SetSdfsPermissions(ctx context.Context, user string, permissions []string) error {
 
-	fi, err := n.us.SetSdfsPermissions(ctx, &spb.SetPermissionsRequest{Permissions: parsePermissions(permissions), User: user})
+	fi, err := n.us.SetSdfsPermissions(ctx, &spb.SetPermissionsRequest{PvolumeID: n.volumeid, Permissions: parsePermissions(permissions), User: user})
 	if err != nil {
 		log.Print(err)
 		return err
@@ -1731,7 +1736,7 @@ func (n *SdfsConnection) SetSdfsPermissions(ctx context.Context, user string, pe
 
 func (n *SdfsConnection) DeleteUser(ctx context.Context, user string) error {
 
-	fi, err := n.us.DeleteUser(ctx, &spb.DeleteUserRequest{User: user})
+	fi, err := n.us.DeleteUser(ctx, &spb.DeleteUserRequest{PvolumeID: n.volumeid, User: user})
 	if err != nil {
 		log.Print(err)
 		return err
