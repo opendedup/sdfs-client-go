@@ -665,6 +665,14 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 	uc := spb.NewSdfsUserServiceClient(conn)
+	if volumeid == -1 {
+		vi, err := vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: volumeid})
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
+		volumeid = vi.SerialNumber
+	}
 	sc := &SdfsConnection{Clnt: conn, vc: vc, fc: fc, evt: evt, DedupeEnabled: dedupeEnabled, us: uc, SdfsInterceptor: interceptor, Path: zpath, volumeid: volumeid}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
