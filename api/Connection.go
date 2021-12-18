@@ -1175,7 +1175,7 @@ func (n *SdfsConnection) Unlink(ctx context.Context, path string) (err error) {
 	if n.DedupeEnabled {
 		n.Dedupe.CloseFile(n.GetAbsPath(path))
 	}
-	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{Path: n.GetAbsPath(path)})
+	fi, err := n.fc.Unlink(ctx, &spb.UnlinkRequest{PvolumeID: n.Volumeid, Path: n.GetAbsPath(path)})
 	if err != nil {
 		log.Print(err)
 		return err
