@@ -181,6 +181,10 @@ func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
 	return n.Clnt.Close()
 }
 
+func (n *SdfsConnection) GetProxyVolumes(ctx context.Context) (*spb.ProxyVolumeInfoResponse, error) {
+	return n.vc.GetProxyVolumes(ctx, &spb.ProxyVolumeInfoRequest{})
+}
+
 func (n *SdfsInterceptor) authenicateUser() (token string, err error) {
 	_ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	defer cancel()
