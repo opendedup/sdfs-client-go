@@ -26,6 +26,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	wspeed := flagSet.String("write-speed", "-1", "Sets the max write speed from storage for blocks in KB/s")
 	kage := flagSet.Int64("max-key-age", -1, "Sets the maximum age of a deduplication entry that can be referenced. If set to -1 the age is infinite.")
 	vinfo := flagSet.Bool("volume", false, "Returns Volume Info")
+	vvinfo := flagSet.Bool("proxy-volumes", false, "Returns A List of Proxied Volumes")
 	dinfo := flagSet.Bool("dse", false, "Returns Dedupe Storage Info")
 	sinfo := flagSet.Bool("system", false, "System Info")
 	gcsecd := flagSet.Bool("gc-schedule", false, "Returns The Garbage Collection Schedule")
@@ -171,6 +172,24 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 				utils.FormatSize(v.Size),
 				utils.FormatSize(v.CompressedSize),
 				fmt.Sprintf("%t", v.Local),
+			})
+
+		}
+		table.Render()
+		return
+	}
+	if *vvinfo {
+		cvo, err := connection.GetProxyVolumes(ctx)
+		if err != nil {
+			fmt.Printf("Unable to list connected volumes error: %v\n", err)
+			os.Exit(1)
+		}
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"Volume ID", "Name"})
+		for _, v := range cvo.VolumeInfoResponse {
+
+			table.Append([]string{fmt.Sprintf("%d", v.SerialNumber),
+				v.Name,
 			})
 
 		}
