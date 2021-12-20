@@ -622,7 +622,7 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 				config.Certificates = []tls.Certificate{clientCert}
 				tCreds = credentials.NewTLS(config)
 			}
-			log.Infof("loaded certs MtlsCert=%s Mtlskey=%s\n", string(creds.MtlsCert), string(creds.Mtlskey))
+			log.Debugf("loaded certs MtlsCert=%s Mtlskey=%s\n", string(creds.MtlsCert), string(creds.Mtlskey))
 		} else {
 			tCreds = credentials.NewTLS(config)
 		}
