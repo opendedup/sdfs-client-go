@@ -34,7 +34,6 @@ type VolumeServiceClient interface {
 	SyncFromCloudVolume(ctx context.Context, in *SyncFromVolRequest, opts ...grpc.CallOption) (*SyncFromVolResponse, error)
 	SyncCloudVolume(ctx context.Context, in *SyncVolRequest, opts ...grpc.CallOption) (*SyncVolResponse, error)
 	SetMaxAge(ctx context.Context, in *SetMaxAgeRequest, opts ...grpc.CallOption) (*SetMaxAgeResponse, error)
-	GetProxyVolumes(ctx context.Context, in *ProxyVolumeInfoRequest, opts ...grpc.CallOption) (*ProxyVolumeInfoResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -198,15 +197,6 @@ func (c *volumeServiceClient) SetMaxAge(ctx context.Context, in *SetMaxAgeReques
 	return out, nil
 }
 
-func (c *volumeServiceClient) GetProxyVolumes(ctx context.Context, in *ProxyVolumeInfoRequest, opts ...grpc.CallOption) (*ProxyVolumeInfoResponse, error) {
-	out := new(ProxyVolumeInfoResponse)
-	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.VolumeService/GetProxyVolumes", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility
@@ -228,7 +218,6 @@ type VolumeServiceServer interface {
 	SyncFromCloudVolume(context.Context, *SyncFromVolRequest) (*SyncFromVolResponse, error)
 	SyncCloudVolume(context.Context, *SyncVolRequest) (*SyncVolResponse, error)
 	SetMaxAge(context.Context, *SetMaxAgeRequest) (*SetMaxAgeResponse, error)
-	GetProxyVolumes(context.Context, *ProxyVolumeInfoRequest) (*ProxyVolumeInfoResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -286,9 +275,6 @@ func (*UnimplementedVolumeServiceServer) SyncCloudVolume(context.Context, *SyncV
 }
 func (*UnimplementedVolumeServiceServer) SetMaxAge(context.Context, *SetMaxAgeRequest) (*SetMaxAgeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetMaxAge not implemented")
-}
-func (*UnimplementedVolumeServiceServer) GetProxyVolumes(context.Context, *ProxyVolumeInfoRequest) (*ProxyVolumeInfoResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetProxyVolumes not implemented")
 }
 func (*UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 
@@ -602,24 +588,6 @@ func _VolumeService_SetMaxAge_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VolumeService_GetProxyVolumes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ProxyVolumeInfoRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VolumeServiceServer).GetProxyVolumes(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/org.opendedup.grpc.VolumeService/GetProxyVolumes",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VolumeServiceServer).GetProxyVolumes(ctx, req.(*ProxyVolumeInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _VolumeService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.VolumeService",
 	HandlerType: (*VolumeServiceServer)(nil),
@@ -691,10 +659,6 @@ var _VolumeService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetMaxAge",
 			Handler:    _VolumeService_SetMaxAge_Handler,
-		},
-		{
-			MethodName: "GetProxyVolumes",
-			Handler:    _VolumeService_GetProxyVolumes_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

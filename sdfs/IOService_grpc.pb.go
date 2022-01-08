@@ -51,6 +51,8 @@ type FileIOServiceClient interface {
 	GetCloudMetaFile(ctx context.Context, in *GetCloudFileRequest, opts ...grpc.CallOption) (*GetCloudFileResponse, error)
 	StatFS(ctx context.Context, in *StatFSRequest, opts ...grpc.CallOption) (*StatFSResponse, error)
 	FileNotification(ctx context.Context, in *SyncNotificationSubscription, opts ...grpc.CallOption) (FileIOService_FileNotificationClient, error)
+	SetRetrievalTier(ctx context.Context, in *SetRetrievalTierRequest, opts ...grpc.CallOption) (*SetRetrievalTierResponse, error)
+	GetRetrievalTier(ctx context.Context, in *GetRetrievalTierRequest, opts ...grpc.CallOption) (*GetRetrievalTierResponse, error)
 }
 
 type fileIOServiceClient struct {
@@ -381,6 +383,24 @@ func (x *fileIOServiceFileNotificationClient) Recv() (*FileMessageResponse, erro
 	return m, nil
 }
 
+func (c *fileIOServiceClient) SetRetrievalTier(ctx context.Context, in *SetRetrievalTierRequest, opts ...grpc.CallOption) (*SetRetrievalTierResponse, error) {
+	out := new(SetRetrievalTierResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/SetRetrievalTier", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fileIOServiceClient) GetRetrievalTier(ctx context.Context, in *GetRetrievalTierRequest, opts ...grpc.CallOption) (*GetRetrievalTierResponse, error) {
+	out := new(GetRetrievalTierResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/GetRetrievalTier", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FileIOServiceServer is the server API for FileIOService service.
 // All implementations must embed UnimplementedFileIOServiceServer
 // for forward compatibility
@@ -419,6 +439,8 @@ type FileIOServiceServer interface {
 	GetCloudMetaFile(context.Context, *GetCloudFileRequest) (*GetCloudFileResponse, error)
 	StatFS(context.Context, *StatFSRequest) (*StatFSResponse, error)
 	FileNotification(*SyncNotificationSubscription, FileIOService_FileNotificationServer) error
+	SetRetrievalTier(context.Context, *SetRetrievalTierRequest) (*SetRetrievalTierResponse, error)
+	GetRetrievalTier(context.Context, *GetRetrievalTierRequest) (*GetRetrievalTierResponse, error)
 	mustEmbedUnimplementedFileIOServiceServer()
 }
 
@@ -524,6 +546,12 @@ func (*UnimplementedFileIOServiceServer) StatFS(context.Context, *StatFSRequest)
 }
 func (*UnimplementedFileIOServiceServer) FileNotification(*SyncNotificationSubscription, FileIOService_FileNotificationServer) error {
 	return status.Errorf(codes.Unimplemented, "method FileNotification not implemented")
+}
+func (*UnimplementedFileIOServiceServer) SetRetrievalTier(context.Context, *SetRetrievalTierRequest) (*SetRetrievalTierResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetRetrievalTier not implemented")
+}
+func (*UnimplementedFileIOServiceServer) GetRetrievalTier(context.Context, *GetRetrievalTierRequest) (*GetRetrievalTierResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRetrievalTier not implemented")
 }
 func (*UnimplementedFileIOServiceServer) mustEmbedUnimplementedFileIOServiceServer() {}
 
@@ -1128,6 +1156,42 @@ func (x *fileIOServiceFileNotificationServer) Send(m *FileMessageResponse) error
 	return x.ServerStream.SendMsg(m)
 }
 
+func _FileIOService_SetRetrievalTier_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRetrievalTierRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).SetRetrievalTier(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/SetRetrievalTier",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).SetRetrievalTier(ctx, req.(*SetRetrievalTierRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_GetRetrievalTier_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRetrievalTierRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileIOServiceServer).GetRetrievalTier(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.FileIOService/GetRetrievalTier",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileIOServiceServer).GetRetrievalTier(ctx, req.(*GetRetrievalTierRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _FileIOService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.FileIOService",
 	HandlerType: (*FileIOServiceServer)(nil),
@@ -1259,6 +1323,14 @@ var _FileIOService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StatFS",
 			Handler:    _FileIOService_StatFS_Handler,
+		},
+		{
+			MethodName: "SetRetrievalTier",
+			Handler:    _FileIOService_SetRetrievalTier_Handler,
+		},
+		{
+			MethodName: "GetRetrievalTier",
+			Handler:    _FileIOService_GetRetrievalTier_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

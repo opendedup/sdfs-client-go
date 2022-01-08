@@ -45,6 +45,7 @@ var Debug bool
 type SdfsConnection struct {
 	Clnt            *grpc.ClientConn
 	vc              spb.VolumeServiceClient
+	pc              spb.PortRedirectorServiceClient
 	fc              spb.FileIOServiceClient
 	evt             spb.SDFSEventServiceClient
 	us              spb.SdfsUserServiceClient
@@ -182,7 +183,11 @@ func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
 }
 
 func (n *SdfsConnection) GetProxyVolumes(ctx context.Context) (*spb.ProxyVolumeInfoResponse, error) {
-	return n.vc.GetProxyVolumes(ctx, &spb.ProxyVolumeInfoRequest{})
+	return n.pc.GetProxyVolumes(ctx, &spb.ProxyVolumeInfoRequest{})
+}
+
+func (n *SdfsConnection) ReloadProxyConfig(ctx context.Context) (*spb.ReloadConfigResponse, error) {
+	return n.pc.ReloadConfig(ctx, &spb.ReloadConfigRequest{})
 }
 
 func (n *SdfsInterceptor) authenicateUser() (token string, err error) {
@@ -669,6 +674,7 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 	fc := spb.NewFileIOServiceClient(conn)
 	evt := spb.NewSDFSEventServiceClient(conn)
 	uc := spb.NewSdfsUserServiceClient(conn)
+	pc := spb.NewPortRedirectorServiceClient(conn)
 	if volumeid == -1 {
 		vi, err := vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: volumeid})
 		if err != nil {
@@ -680,12 +686,14 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 	sc := &SdfsConnection{Clnt: conn,
 		vc:              vc,
 		fc:              fc,
+		pc:              pc,
 		evt:             evt,
 		DedupeEnabled:   dedupeEnabled,
 		us:              uc,
 		SdfsInterceptor: interceptor,
 		Path:            zpath,
-		Volumeid:        volumeid}
+		Volumeid:        volumeid,
+	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
 		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, volumeid)
