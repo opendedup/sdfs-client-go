@@ -42,6 +42,7 @@ type DedupeEngine struct {
 	pool        *worker.Pool
 	mu          sync.Mutex
 	pVolumeID   int64
+	bufferSize  int
 }
 
 type DedupeBuffer struct {
@@ -87,7 +88,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 	if debug {
 		log.SetLevel(logrus.DebugLevel)
 	}
-	pool := worker.NewWorkerPool(1, 1)
+	pool := worker.NewWorkerPool(threads, 1)
 
 	//Start worker pool
 	pool.Start()
@@ -119,6 +120,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		rabinTable:  rabin.NewTable(uint64(fi.PolyNumber), int(fi.WindowSize)),
 		pool:        pool,
 		pVolumeID:   volumeid,
+		bufferSize:  size,
 	}, nil
 }
 
@@ -154,7 +156,7 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 			n.pool.Submit(&Job{buffer: buffer, engine: n, file: file})
 
 		}
-		l, err := lru.NewWithEvict(4, onEvicted)
+		l, err := lru.NewWithEvict(n.bufferSize, onEvicted)
 		if err != nil {
 			log.Errorf("unable initialize %d : %v", fileHandle, err)
 			return err
