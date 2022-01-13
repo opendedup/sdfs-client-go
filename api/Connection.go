@@ -808,6 +808,52 @@ func (n *SdfsConnection) RemovePrefix(fileName string) string {
 	}
 }
 
+//SetRetrievalTier set retrieval tier or rehydration priority for cloud targets
+
+func (n *SdfsConnection) SetRetrievalTier(ctx context.Context, tierType string) error {
+
+	rc, err := n.fc.SetRetrievalTier(ctx, &spb.SetRetrievalTierRequest{TierType: tierType, PvolumeID: n.Volumeid})
+
+	if err != nil {
+
+		log.Print(err)
+
+		return err
+
+	} else if rc.GetErrorCode() > 0 {
+
+		return &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
+
+	} else {
+
+		return nil
+
+	}
+
+}
+
+//GetRetrievalTier gets the retrieval tier value
+
+func (n *SdfsConnection) GetRetrievalTier(ctx context.Context) (string, error) {
+
+	fi, err := n.fc.GetRetrievalTier(ctx, &spb.GetRetrievalTierRequest{PvolumeID: n.Volumeid})
+
+	if err != nil {
+
+		log.Print(err)
+
+		return "", err
+
+	} else if fi.GetErrorCode() > 0 {
+
+		return "", &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+
+	}
+
+	return fi.TierType, nil
+
+}
+
 //DeleteFile removes a given file
 func (n *SdfsConnection) DeleteFile(ctx context.Context, path string) error {
 	if n.DedupeEnabled {
