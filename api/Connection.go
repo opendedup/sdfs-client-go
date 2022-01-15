@@ -49,6 +49,7 @@ type SdfsConnection struct {
 	fc              spb.FileIOServiceClient
 	evt             spb.SDFSEventServiceClient
 	us              spb.SdfsUserServiceClient
+	ec              spb.EncryptionServiceClient
 	Dedupe          *dedupe.DedupeEngine
 	DedupeEnabled   bool
 	SdfsInterceptor *SdfsInterceptor
@@ -675,6 +676,7 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 	evt := spb.NewSDFSEventServiceClient(conn)
 	uc := spb.NewSdfsUserServiceClient(conn)
 	pc := spb.NewPortRedirectorServiceClient(conn)
+	ec := spb.NewEncryptionServiceClient(conn)
 	if volumeid == -1 {
 		vi, err := vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: volumeid})
 		if err != nil {
@@ -687,6 +689,7 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 		vc:              vc,
 		fc:              fc,
 		pc:              pc,
+		ec:              ec,
 		evt:             evt,
 		DedupeEnabled:   dedupeEnabled,
 		us:              uc,
@@ -713,6 +716,43 @@ func NewConnection(path string, dedupeEnabled bool, volumeid int64) (*SdfsConnec
 func (n *SdfsConnection) GetAbsPath(path string) string {
 	path = strings.TrimPrefix(path, "/")
 	return fmt.Sprintf("%s/%s", n.Path, path)
+}
+
+//ValidateCertificate validates a client certificate
+func (n *SdfsConnection) ValidateCertificate(ctx context.Context, hash string) (bool, error) {
+	rc, err := n.ec.ValidateCertificate(ctx, &spb.EncryptionKeyVerifyRequest{Hash: hash})
+	if err != nil {
+		log.Print(err)
+		return false, err
+	} else if rc.GetErrorCode() > 0 {
+		return false, &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
+	} else {
+		return rc.Accept, nil
+	}
+}
+
+func (n *SdfsConnection) ExportServerCertificate(ctx context.Context) (certChainFilePath string, privateKeyFilePath string, err error) {
+	rc, err := n.ec.ExportServerCertificate(ctx, &spb.ExportServerCertRequest{})
+	if err != nil {
+		log.Print(err)
+		return certChainFilePath, privateKeyFilePath, err
+	} else if rc.GetErrorCode() > 0 {
+		return certChainFilePath, privateKeyFilePath, &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
+	} else {
+		return rc.CertChainFilePath, rc.PrivateKeyFilePath, nil
+	}
+}
+
+func (n *SdfsConnection) DeleteServerCertificate(ctx context.Context, hash string) (err error) {
+	rc, err := n.ec.DeleteExportedCert(ctx, &spb.DeleteExportedCertRequest{})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if rc.GetErrorCode() > 0 {
+		return &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
+	} else {
+		return nil
+	}
 }
 
 //RmDir removes a given directory

@@ -18,6 +18,8 @@ const _ = grpc.SupportPackageIsVersion6
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type EncryptionServiceClient interface {
 	ValidateCertificate(ctx context.Context, in *EncryptionKeyVerifyRequest, opts ...grpc.CallOption) (*EncryptionKeyVerifyResponse, error)
+	ExportServerCertificate(ctx context.Context, in *ExportServerCertRequest, opts ...grpc.CallOption) (*ExportServerCertResponse, error)
+	DeleteExportedCert(ctx context.Context, in *DeleteExportedCertRequest, opts ...grpc.CallOption) (*DeleteExportedCertResponse, error)
 }
 
 type encryptionServiceClient struct {
@@ -37,11 +39,31 @@ func (c *encryptionServiceClient) ValidateCertificate(ctx context.Context, in *E
 	return out, nil
 }
 
+func (c *encryptionServiceClient) ExportServerCertificate(ctx context.Context, in *ExportServerCertRequest, opts ...grpc.CallOption) (*ExportServerCertResponse, error) {
+	out := new(ExportServerCertResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.EncryptionService/ExportServerCertificate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *encryptionServiceClient) DeleteExportedCert(ctx context.Context, in *DeleteExportedCertRequest, opts ...grpc.CallOption) (*DeleteExportedCertResponse, error) {
+	out := new(DeleteExportedCertResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.EncryptionService/DeleteExportedCert", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EncryptionServiceServer is the server API for EncryptionService service.
 // All implementations must embed UnimplementedEncryptionServiceServer
 // for forward compatibility
 type EncryptionServiceServer interface {
 	ValidateCertificate(context.Context, *EncryptionKeyVerifyRequest) (*EncryptionKeyVerifyResponse, error)
+	ExportServerCertificate(context.Context, *ExportServerCertRequest) (*ExportServerCertResponse, error)
+	DeleteExportedCert(context.Context, *DeleteExportedCertRequest) (*DeleteExportedCertResponse, error)
 	mustEmbedUnimplementedEncryptionServiceServer()
 }
 
@@ -51,6 +73,12 @@ type UnimplementedEncryptionServiceServer struct {
 
 func (*UnimplementedEncryptionServiceServer) ValidateCertificate(context.Context, *EncryptionKeyVerifyRequest) (*EncryptionKeyVerifyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateCertificate not implemented")
+}
+func (*UnimplementedEncryptionServiceServer) ExportServerCertificate(context.Context, *ExportServerCertRequest) (*ExportServerCertResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExportServerCertificate not implemented")
+}
+func (*UnimplementedEncryptionServiceServer) DeleteExportedCert(context.Context, *DeleteExportedCertRequest) (*DeleteExportedCertResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteExportedCert not implemented")
 }
 func (*UnimplementedEncryptionServiceServer) mustEmbedUnimplementedEncryptionServiceServer() {}
 
@@ -76,6 +104,42 @@ func _EncryptionService_ValidateCertificate_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _EncryptionService_ExportServerCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportServerCertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EncryptionServiceServer).ExportServerCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.EncryptionService/ExportServerCertificate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EncryptionServiceServer).ExportServerCertificate(ctx, req.(*ExportServerCertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _EncryptionService_DeleteExportedCert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteExportedCertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EncryptionServiceServer).DeleteExportedCert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.EncryptionService/DeleteExportedCert",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EncryptionServiceServer).DeleteExportedCert(ctx, req.(*DeleteExportedCertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _EncryptionService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "org.opendedup.grpc.EncryptionService",
 	HandlerType: (*EncryptionServiceServer)(nil),
@@ -83,6 +147,14 @@ var _EncryptionService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateCertificate",
 			Handler:    _EncryptionService_ValidateCertificate_Handler,
+		},
+		{
+			MethodName: "ExportServerCertificate",
+			Handler:    _EncryptionService_ExportServerCertificate_Handler,
+		},
+		{
+			MethodName: "DeleteExportedCert",
+			Handler:    _EncryptionService_DeleteExportedCert_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
