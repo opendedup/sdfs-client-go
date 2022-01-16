@@ -80,11 +80,13 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	}
 	if utils.IsFlagPassed("upload", flagSet) {
 		if !utils.IsFlagPassed("src", flagSet) {
-			fmt.Println("--src must be set for upload")
+			fmt.Println("-src must be set for upload")
 			os.Exit(1)
 		}
 		if !utils.IsFlagPassed("dst", flagSet) {
 			dst = src
+		} else {
+
 		}
 		_len, err := connection.Upload(ctx, *src, *dst)
 		if err != nil {
