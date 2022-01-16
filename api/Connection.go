@@ -1626,7 +1626,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 		log.Info("-1")
 		return -1, err
 	}
-	info, err := os.Stat(n.GetAbsPath(src))
+	info, err := os.Stat(src)
 	if err != nil {
 		log.Info("-2")
 		return -1, err
