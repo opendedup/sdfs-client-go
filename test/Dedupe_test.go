@@ -131,12 +131,12 @@ func TestDedupeReWriteFile(t *testing.T) {
 	connection.CloseConnection(ctx)
 	connection = connect(t, false)
 	defer connection.CloseConnection(ctx)
-	_, err := connection.Download(ctx, fn, "/tmp/"+fn)
+	_, err := connection.Download(ctx, fn, "/tmp/"+fn, 1024)
 	if err != nil {
 		t.Logf("download error %v", err)
 	}
 	dn := string(randBytesMaskImpr(16))
-	_, err = connection.Upload(ctx, "/tmp/"+fn, dn)
+	_, err = connection.Upload(ctx, "/tmp/"+fn, dn, 1024)
 	if err != nil {
 		t.Logf("upload error %v", err)
 	}

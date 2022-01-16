@@ -31,6 +31,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	sattr := flagSet.String("attribute", ".", "Sets A File Attribute")
 	key := flagSet.String("key", "key", "The Attribute Key")
 	value := flagSet.String("value", "value", "The Attribute Value")
+	bs := flagSet.Int("blocksize", 1024, "The blocksize in kb for uploads and downloads")
 	fio := flagSet.String("io", ".", "Returns File Dedupe Rates and other IO Attributes")
 	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
@@ -85,10 +86,10 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		if !utils.IsFlagPassed("dst", flagSet) {
 			dst = src
-		} else {
-
 		}
-		_len, err := connection.Upload(ctx, *src, *dst)
+		sts := time.Now().Unix()
+		_len, err := connection.Upload(ctx, *src, *dst, *bs)
+		ets := time.Now().Unix()
 		if err != nil {
 			fmt.Printf("Unable to upload: %s to: %s error: %v\n", *src, *dst, err)
 			os.Exit(1)
@@ -108,7 +109,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			}
 
 		}
-		fmt.Printf("Uploaded %s, %d bytes written \n", *src, _len)
+		fmt.Printf("Uploaded %s, %d bytes written in %d seconds \n", *src, _len, (ets - sts))
 		return
 	}
 	if utils.IsFlagPassed("download", flagSet) {
@@ -119,7 +120,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		if !utils.IsFlagPassed("dst", flagSet) {
 			dst = src
 		}
-		len, err := connection.Download(ctx, *src, *dst)
+		len, err := connection.Download(ctx, *src, *dst, *bs)
 		if err != nil {
 			fmt.Printf("Unable to download: %s to: %s error: %v\n", *src, *dst, err)
 			os.Exit(1)

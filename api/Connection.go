@@ -1620,38 +1620,32 @@ func (n *SdfsConnection) SyncCloudVolume(ctx context.Context, waitForCompletion 
 }
 
 //Upload uploads a file to the filesystem
-func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written int64, err error) {
+func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize int) (written int64, err error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
-		log.Info("-1")
 		return -1, err
 	}
 	info, err := os.Stat(src)
 	if err != nil {
-		log.Info("-2")
 		return -1, err
 	}
 	if info.IsDir() {
-		log.Info("-3")
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
 	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: sdfsTempFolder})
 	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: tmpname})
 	if err != nil {
-		log.Info("1")
 		return -1, err
 	} else if mkf.GetErrorCode() > 0 {
-		log.Info("2")
 		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
 	}
 	fh, err := n.Open(ctx, tmpname, -1)
 	if err != nil {
-		log.Info("3")
 		return -1, err
 	}
 	defer n.Unlink(ctx, tmpname)
-	b1 := make([]byte, 1024*1024)
+	b1 := make([]byte, blockSize*1024)
 	var offset int64 = 0
 	var n1 int = 0
 	r, err := os.Open(src)
@@ -1709,7 +1703,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 }
 
 //Download downloads a file from SDFS locally
-func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesread int64, err error) {
+func (n *SdfsConnection) Download(ctx context.Context, src, dst string, blockSize int) (bytesread int64, err error) {
 	if n.DedupeEnabled {
 		err := n.Dedupe.SyncFile(n.GetAbsPath(src))
 		if err != nil {
@@ -1730,7 +1724,7 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string) (bytesre
 	}
 	defer n.fc.Release(ctx, &spb.FileCloseRequest{PvolumeID: n.Volumeid, FileHandle: rd.GetFileHandle()})
 	var read int64 = 0
-	var blocksize int32 = 128 * 1024
+	var blocksize int32 = int32(blockSize * 1024)
 	var length = fi.GetResponse()[0].Size
 	writer, err := os.Create(dst)
 	if err != nil {
