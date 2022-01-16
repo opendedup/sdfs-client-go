@@ -1651,12 +1651,11 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 		return -1, err
 	}
 	defer n.Unlink(ctx, tmpname)
-	b1 := make([]byte, 128*1024)
+	b1 := make([]byte, 1024*1024)
 	var offset int64 = 0
 	var n1 int = 0
 	r, err := os.Open(src)
 	if err != nil {
-		log.Info("4")
 		return -1, err
 	}
 	defer r.Close()
