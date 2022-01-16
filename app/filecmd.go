@@ -67,7 +67,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	}
 	if utils.IsFlagPassed("snapshot", flagSet) {
 		if !utils.IsFlagPassed("src", flagSet) || !utils.IsFlagPassed("dst", flagSet) {
-			fmt.Println("--src and dst must be set for snapshot")
+			fmt.Println("-src and dst must be set for snapshot")
 			os.Exit(1)
 		}
 		_, err := connection.CopyFile(ctx, *src, *dst, false)

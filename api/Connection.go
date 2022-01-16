@@ -1623,25 +1623,31 @@ func (n *SdfsConnection) SyncCloudVolume(ctx context.Context, waitForCompletion 
 func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written int64, err error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
+		log.Info("-1")
 		return -1, err
 	}
 	info, err := os.Stat(n.GetAbsPath(src))
 	if err != nil {
+		log.Info("-2")
 		return -1, err
 	}
 	if info.IsDir() {
+		log.Info("-3")
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
 	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: sdfsTempFolder})
 	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: tmpname})
 	if err != nil {
+		log.Info("1")
 		return -1, err
 	} else if mkf.GetErrorCode() > 0 {
+		log.Info("2")
 		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
 	}
 	fh, err := n.Open(ctx, tmpname, -1)
 	if err != nil {
+		log.Info("3")
 		return -1, err
 	}
 	defer n.Unlink(ctx, tmpname)
@@ -1650,6 +1656,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string) (written i
 	var n1 int = 0
 	r, err := os.Open(src)
 	if err != nil {
+		log.Info("4")
 		return -1, err
 	}
 	defer r.Close()
