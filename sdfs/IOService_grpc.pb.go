@@ -35,6 +35,7 @@ type FileIOServiceClient interface {
 	RmDir(ctx context.Context, in *RmDirRequest, opts ...grpc.CallOption) (*RmDirResponse, error)
 	Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error)
 	Write(ctx context.Context, in *DataWriteRequest, opts ...grpc.CallOption) (*DataWriteResponse, error)
+	StreamWrite(ctx context.Context, opts ...grpc.CallOption) (FileIOService_StreamWriteClient, error)
 	Read(ctx context.Context, in *DataReadRequest, opts ...grpc.CallOption) (*DataReadResponse, error)
 	Release(ctx context.Context, in *FileCloseRequest, opts ...grpc.CallOption) (*FileCloseResponse, error)
 	Mknod(ctx context.Context, in *MkNodRequest, opts ...grpc.CallOption) (*MkNodResponse, error)
@@ -216,6 +217,40 @@ func (c *fileIOServiceClient) Write(ctx context.Context, in *DataWriteRequest, o
 	return out, nil
 }
 
+func (c *fileIOServiceClient) StreamWrite(ctx context.Context, opts ...grpc.CallOption) (FileIOService_StreamWriteClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_FileIOService_serviceDesc.Streams[0], "/org.opendedup.grpc.FileIOService/StreamWrite", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &fileIOServiceStreamWriteClient{stream}
+	return x, nil
+}
+
+type FileIOService_StreamWriteClient interface {
+	Send(*DataWriteRequest) error
+	CloseAndRecv() (*DataWriteResponse, error)
+	grpc.ClientStream
+}
+
+type fileIOServiceStreamWriteClient struct {
+	grpc.ClientStream
+}
+
+func (x *fileIOServiceStreamWriteClient) Send(m *DataWriteRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *fileIOServiceStreamWriteClient) CloseAndRecv() (*DataWriteResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(DataWriteResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *fileIOServiceClient) Read(ctx context.Context, in *DataReadRequest, opts ...grpc.CallOption) (*DataReadResponse, error) {
 	out := new(DataReadResponse)
 	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Read", in, out, opts...)
@@ -352,7 +387,7 @@ func (c *fileIOServiceClient) StatFS(ctx context.Context, in *StatFSRequest, opt
 }
 
 func (c *fileIOServiceClient) FileNotification(ctx context.Context, in *SyncNotificationSubscription, opts ...grpc.CallOption) (FileIOService_FileNotificationClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_FileIOService_serviceDesc.Streams[0], "/org.opendedup.grpc.FileIOService/fileNotification", opts...)
+	stream, err := c.cc.NewStream(ctx, &_FileIOService_serviceDesc.Streams[1], "/org.opendedup.grpc.FileIOService/fileNotification", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -423,6 +458,7 @@ type FileIOServiceServer interface {
 	RmDir(context.Context, *RmDirRequest) (*RmDirResponse, error)
 	Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error)
 	Write(context.Context, *DataWriteRequest) (*DataWriteResponse, error)
+	StreamWrite(FileIOService_StreamWriteServer) error
 	Read(context.Context, *DataReadRequest) (*DataReadResponse, error)
 	Release(context.Context, *FileCloseRequest) (*FileCloseResponse, error)
 	Mknod(context.Context, *MkNodRequest) (*MkNodResponse, error)
@@ -498,6 +534,9 @@ func (*UnimplementedFileIOServiceServer) Unlink(context.Context, *UnlinkRequest)
 }
 func (*UnimplementedFileIOServiceServer) Write(context.Context, *DataWriteRequest) (*DataWriteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
+}
+func (*UnimplementedFileIOServiceServer) StreamWrite(FileIOService_StreamWriteServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamWrite not implemented")
 }
 func (*UnimplementedFileIOServiceServer) Read(context.Context, *DataReadRequest) (*DataReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
@@ -863,6 +902,32 @@ func _FileIOService_Write_Handler(srv interface{}, ctx context.Context, dec func
 		return srv.(FileIOServiceServer).Write(ctx, req.(*DataWriteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _FileIOService_StreamWrite_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(FileIOServiceServer).StreamWrite(&fileIOServiceStreamWriteServer{stream})
+}
+
+type FileIOService_StreamWriteServer interface {
+	SendAndClose(*DataWriteResponse) error
+	Recv() (*DataWriteRequest, error)
+	grpc.ServerStream
+}
+
+type fileIOServiceStreamWriteServer struct {
+	grpc.ServerStream
+}
+
+func (x *fileIOServiceStreamWriteServer) SendAndClose(m *DataWriteResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *fileIOServiceStreamWriteServer) Recv() (*DataWriteRequest, error) {
+	m := new(DataWriteRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func _FileIOService_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1334,6 +1399,11 @@ var _FileIOService_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamWrite",
+			Handler:       _FileIOService_StreamWrite_Handler,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "fileNotification",
 			Handler:       _FileIOService_FileNotification_Handler,
