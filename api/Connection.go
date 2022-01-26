@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	uuid "github.com/google/uuid"
@@ -43,18 +44,20 @@ var Debug bool
 
 //SdfsConnection is the connection info
 type SdfsConnection struct {
-	Clnt            *grpc.ClientConn
-	vc              spb.VolumeServiceClient
-	pc              spb.PortRedirectorServiceClient
-	fc              spb.FileIOServiceClient
-	evt             spb.SDFSEventServiceClient
-	us              spb.SdfsUserServiceClient
-	ec              spb.EncryptionServiceClient
-	Dedupe          *dedupe.DedupeEngine
-	DedupeEnabled   bool
-	SdfsInterceptor *SdfsInterceptor
-	Path            string
-	Volumeid        int64
+	Clnt             *grpc.ClientConn
+	vc               spb.VolumeServiceClient
+	pc               spb.PortRedirectorServiceClient
+	fc               spb.FileIOServiceClient
+	evt              spb.SDFSEventServiceClient
+	us               spb.SdfsUserServiceClient
+	ec               spb.EncryptionServiceClient
+	Dedupe           *dedupe.DedupeEngine
+	DedupeEnabled    bool
+	SdfsInterceptor  *SdfsInterceptor
+	Path             string
+	Volumeid         int64
+	streamingClients map[int64]spb.FileIOService_StreamWriteClient
+	configLock       sync.RWMutex
 }
 
 // A Credentials Struct
@@ -1296,6 +1299,32 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	}
 }
 
+func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
+
+	if n.DedupeEnabled {
+		return n.Dedupe.Write(fh, offset, data, length)
+	} else {
+		n.configLock.RLock()
+		defer n.configLock.RUnlock()
+		if val, ok := n.streamingClients[fh]; ok {
+			val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
+		} else {
+			val, err = n.fc.StreamWrite(ctx)
+			n.configLock.RUnlock()
+			n.configLock.Lock()
+			n.streamingClients[fh] = val
+			n.configLock.Unlock()
+			n.configLock.RLock()
+			val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
+			if err != nil {
+				log.Print(err)
+				return err
+			}
+		}
+		return nil
+	}
+}
+
 //Read reads data from a given filehandle
 func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, length int32) (data []byte, err error) {
 	if n.DedupeEnabled {
@@ -1322,6 +1351,22 @@ func (n *SdfsConnection) Release(ctx context.Context, fh int64) (err error) {
 		if err != nil {
 			log.Print(err)
 			return err
+		}
+	}
+	n.configLock.RLock()
+	defer n.configLock.RUnlock()
+	if val, ok := n.streamingClients[fh]; ok {
+		n.configLock.RUnlock()
+		n.configLock.Lock()
+		delete(n.streamingClients, fh)
+		n.configLock.Unlock()
+		n.configLock.RLock()
+		fi, err := val.CloseAndRecv()
+		if err != nil {
+			log.Print(err)
+			return err
+		} else if fi.GetErrorCode() > 0 {
+			return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 		}
 	}
 	fi, err := n.fc.Release(ctx, &spb.FileCloseRequest{PvolumeID: n.Volumeid, FileHandle: fh})
@@ -1657,7 +1702,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 	n1, err = r.Read(b1)
 	s := make([]byte, n1)
 	copy(s, b1)
-	err = n.Write(ctx, fh, s, offset, int32(n1))
+	err = n.StreamWrite(ctx, fh, s, offset, int32(n1))
 	offset += int64(n1)
 	if err != nil {
 		n.Release(ctx, fh)
