@@ -1702,7 +1702,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 	n1, err = r.Read(b1)
 	s := make([]byte, n1)
 	copy(s, b1)
-	err = n.StreamWrite(ctx, fh, s, offset, int32(n1))
+	err = n.Write(ctx, fh, s, offset, int32(n1))
 	offset += int64(n1)
 	if err != nil {
 		n.Release(ctx, fh)
