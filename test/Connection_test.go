@@ -25,7 +25,7 @@ import (
 )
 
 var address = "sdfss://localhost:6442"
-var imagename = "gcr.io/hybrics/hybrics:master"
+var imagename = "gcr.io/hybrics/hybrics:dp2"
 var password = "password123"
 
 const (

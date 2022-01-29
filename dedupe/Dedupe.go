@@ -15,6 +15,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	rabin "github.com/opendedup/go-rabin/rabin"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	"github.com/pierrec/lz4/v4"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -321,7 +322,15 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
-			ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data}
+			buf := make([]byte, lz4.CompressBlockBound(len(fingers[i].data)))
+
+			var c lz4.Compressor
+			_, err := c.CompressBlock(fingers[i].data, buf)
+			if err != nil {
+				log.Print(err)
+				return nil, err
+			}
+			ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: true, CompressedLenght: int32(len(fingers[i].data))}
 			ces[i] = ce
 		} else {
 			ce := &spb.ChunkEntry{}

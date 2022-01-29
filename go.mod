@@ -31,6 +31,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
+	github.com/pierrec/lz4/v4 v4.1.12 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sasha-s/go-deadlock v0.2.0 // indirect
 	github.com/seehuhn/mt19937 v1.0.0 // indirect

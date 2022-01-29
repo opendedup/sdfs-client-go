@@ -22,6 +22,7 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	"github.com/pierrec/lz4/v4"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -1288,7 +1289,15 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	if n.DedupeEnabled {
 		return n.Dedupe.Write(fh, offset, data, length)
 	} else {
-		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
+		buf := make([]byte, lz4.CompressBlockBound(len(data)))
+
+		var c lz4.Compressor
+		_, err := c.CompressBlock(data, buf)
+		if err != nil {
+			log.Print(err)
+			return err
+		}
+		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
 		if err != nil {
 			log.Print(err)
 			return err
@@ -1315,7 +1324,15 @@ func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte,
 			n.streamingClients[fh] = val
 			n.configLock.Unlock()
 			n.configLock.RLock()
-			val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
+			buf := make([]byte, lz4.CompressBlockBound(len(data)))
+
+			var c lz4.Compressor
+			_, err := c.CompressBlock(data, buf)
+			if err != nil {
+				log.Print(err)
+				return err
+			}
+			val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
 			if err != nil {
 				log.Print(err)
 				return err
@@ -1340,6 +1357,15 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 		return data, err
 	} else if fi.GetErrorCode() > 0 {
 		return data, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	if fi.Compressed {
+		out := make([]byte, fi.Read)
+		_, err = lz4.UncompressBlock(fi.Data, out)
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
+		return out, nil
 	}
 	return fi.Data, nil
 }
