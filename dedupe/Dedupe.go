@@ -44,6 +44,7 @@ type DedupeEngine struct {
 	mu          sync.Mutex
 	pVolumeID   int64
 	bufferSize  int
+	Compress    bool
 }
 
 type DedupeBuffer struct {

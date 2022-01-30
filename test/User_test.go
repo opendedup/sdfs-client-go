@@ -15,7 +15,7 @@ var testPasswordBad = "password"
 var testDescription = "bladebla"
 
 func TestUserLifeCycle(t *testing.T) {
-	connection := connect(t, false)
+	connection := connect(t, false, true)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer connection.CloseConnection(ctx)
 	defer cancel()
@@ -58,7 +58,7 @@ func TestUserLifeCycle(t *testing.T) {
 }
 
 func TestUserAuthenitcation(t *testing.T) {
-	connection := connect(t, false)
+	connection := connect(t, false, true)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
@@ -70,18 +70,18 @@ func TestUserAuthenitcation(t *testing.T) {
 	assert.Nil(t, err)
 	api.UserName = testUser
 	api.Password = testPassword
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	_, err = connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	connection.CloseConnection(ctx)
 	api.Password = testPasswordBad
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	_, err = connection.DSEInfo(ctx)
 	assert.NotNil(t, err)
 	connection.CloseConnection(ctx)
 	api.UserName = "admin"
 	api.Password = password
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	connection.SetSdfsPassword(ctx, testUser, testPassword+"111")
 	connection.CloseConnection(ctx)
 	api.UserName = testUser
@@ -96,7 +96,7 @@ func TestUserAuthenitcation(t *testing.T) {
 	connection.CloseConnection(ctx)
 	api.UserName = "admin"
 	api.Password = password
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	err = connection.DeleteUser(ctx, testUser)
 	assert.Nil(t, err)
 	users, err := connection.ListUsers(ctx)
@@ -106,7 +106,7 @@ func TestUserAuthenitcation(t *testing.T) {
 }
 
 func TestUserFileAuthorization(t *testing.T) {
-	connection := connect(t, false)
+	connection := connect(t, false, true)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	defer cancel()
@@ -118,13 +118,13 @@ func TestUserFileAuthorization(t *testing.T) {
 	assert.Nil(t, err)
 	api.UserName = testUser
 	api.Password = testPassword
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	_, _, err = makeGenericFileNt(ctx, connection, "", 1024)
 	assert.NotNil(t, err)
 	connection.CloseConnection(ctx)
 	api.UserName = "admin"
 	api.Password = password
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	permissions = []string{"FILE_WRITE", "FILE_READ", "METADATA_READ"}
 	err = connection.SetSdfsPermissions(ctx, testUser, permissions)
 	assert.Nil(t, err)
@@ -132,7 +132,7 @@ func TestUserFileAuthorization(t *testing.T) {
 	assert.Nil(t, err)
 	api.UserName = testUser
 	api.Password = testPassword
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	fn, _, err := makeGenericFile(ctx, t, connection, "", 1024)
 	assert.Nil(t, err)
 	err = connection.DeleteFile(ctx, fn)
@@ -140,7 +140,7 @@ func TestUserFileAuthorization(t *testing.T) {
 	connection.CloseConnection(ctx)
 	api.UserName = "admin"
 	api.Password = password
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	permissions = []string{"FILE_DELETE"}
 	err = connection.SetSdfsPermissions(ctx, testUser, permissions)
 	assert.Nil(t, err)
@@ -148,7 +148,7 @@ func TestUserFileAuthorization(t *testing.T) {
 	assert.Nil(t, err)
 	api.UserName = testUser
 	api.Password = testPassword
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	err = connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
 	err = connection.AddUser(ctx, "testUser1", testPassword, testDescription, permissions)
@@ -159,7 +159,7 @@ func TestUserFileAuthorization(t *testing.T) {
 	connection.CloseConnection(ctx)
 	api.UserName = "admin"
 	api.Password = password
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	defer connection.CloseConnection(ctx)
 	err = connection.DeleteUser(ctx, testUser)
 	assert.Nil(t, err)

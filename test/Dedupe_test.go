@@ -10,7 +10,7 @@ import (
 )
 
 func TestDedupeNewConnection(t *testing.T) {
-	connection := connect(t, true)
+	connection := connect(t, true, true)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer connection.CloseConnection(ctx)
 	defer cancel()
@@ -20,7 +20,7 @@ func TestDedupeNewConnection(t *testing.T) {
 func TestDedupeWriteFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t, true)
+	connection := connect(t, true, true)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	fn, hash := makeFile(t, "", 1024, true)
@@ -34,7 +34,7 @@ func TestDedupeWriteFile(t *testing.T) {
 func TestDedupeWriteBuffer(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t, true)
+	connection := connect(t, true, true)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	fn := string(randBytesMaskImpr(16))
@@ -105,7 +105,7 @@ func TestDedupeWriteBuffer(t *testing.T) {
 func TestDedupeWriteLargeFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t, true)
+	connection := connect(t, true, true)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
 	fn, hash := makeLargeBlockFile(t, "", 768*1024, true, 1024)
@@ -119,7 +119,7 @@ func TestDedupeWriteLargeFile(t *testing.T) {
 func TestDedupeReWriteFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t, true)
+	connection := connect(t, true, true)
 	assert.NotNil(t, connection)
 
 	fn, hash := makeFile(t, "", 1024*1024, true)
@@ -129,7 +129,7 @@ func TestDedupeReWriteFile(t *testing.T) {
 	t.Logf("info %v", info)
 	assert.Equal(t, hash, nhash)
 	connection.CloseConnection(ctx)
-	connection = connect(t, false)
+	connection = connect(t, false, true)
 	defer connection.CloseConnection(ctx)
 	_, err := connection.Download(ctx, fn, "/tmp/"+fn, 1024)
 	if err != nil {
