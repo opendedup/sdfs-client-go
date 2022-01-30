@@ -330,7 +330,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 				log.Print(err)
 				return nil, err
 			}
-			ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: true, CompressedLenght: int32(len(fingers[i].data))}
+			ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: buf, Compressed: true, CompressedLength: int32(len(fingers[i].data))}
 			ces[i] = ce
 		} else {
 			ce := &spb.ChunkEntry{}

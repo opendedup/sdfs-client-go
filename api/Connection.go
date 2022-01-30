@@ -1297,7 +1297,7 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 			log.Print(err)
 			return err
 		}
-		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
+		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset, Compressed: false})
 		if err != nil {
 			log.Print(err)
 			return err
