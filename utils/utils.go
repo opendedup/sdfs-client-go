@@ -79,7 +79,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	mtlscert := flagSet.String("mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
 	dedupe := flagSet.Bool("dedupe", false, "Enable Client Side Dedupe")
 	volumeid := flagSet.Int64("volumeID", -1, "The volume id to connect to. Required for access through proxy")
-	compress := flagSet.Bool("compress", true, "Compress api traffic")
+	nocompress := flagSet.Bool("nocompress", true, "Compress api traffic")
 	flagSet.Parse(os.Args[2:])
 
 	if !IsFlagPassed("address", flagSet) {
@@ -120,7 +120,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 		pb.Mtls = *mtls
 	}
 	//fmt.Printf("Connecting to %s\n", *address)
-	connection, err := pb.NewConnection(*address, *dedupe, *compress, *volumeid)
+	connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, *volumeid)
 	if err != nil {
 		fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
 		os.Exit(1)
