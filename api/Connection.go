@@ -164,6 +164,9 @@ func (n *SdfsInterceptor) clientInterceptor(
 func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// Logic before invoking the invoker
 	// Calls the invoker to execute RPC
+	if n.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
 	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 	s, err := streamer(_ctx, desc, cc, method, opts...)
 	if status.Code(err) == codes.Unauthenticated {
@@ -661,7 +664,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	} else {
 		log.Debugf("Connecting to %s \n", address)
 
-		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL, Compress: compress}
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
