@@ -15,9 +15,9 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	rabin "github.com/opendedup/go-rabin/rabin"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	"github.com/pierrec/lz4/v4"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/encoding/gzip"
 )
 
 type HashType int
@@ -127,11 +127,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 }
 
 func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoResponse, error) {
-	var opts []grpc.CallOption
-	if n.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID}, opts...)
+	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -304,11 +300,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 		hes[i] = fingers[i].hash
 	}
 	chreq.Hashes = hes
-	var opts []grpc.CallOption
-	if n.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	fi, err := n.hc.CheckHashes(ctx, chreq, opts...)
+	fi, err := n.hc.CheckHashes(ctx, chreq)
 	if err != nil {
 		log.Errorf("error cheching hashes %v", err)
 		return nil, err
@@ -331,8 +323,21 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
-			ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data}
-			ces[i] = ce
+			buf := make([]byte, lz4.CompressBlockBound(len(fingers[i].data)))
+			if n.Compress {
+				var c lz4.Compressor
+				_, err := c.CompressBlock(fingers[i].data, buf)
+				if err != nil {
+					log.Print(err)
+					return nil, err
+				}
+				ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: buf, Compressed: true, CompressedLength: int32(len(fingers[i].data))}
+				ces[i] = ce
+			} else {
+				ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
+				ces[i] = ce
+			}
+
 		} else {
 			ce := &spb.ChunkEntry{}
 			ces[i] = ce
@@ -343,11 +348,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 
 	}
 	wchreq.Chunks = ces
-	var opts []grpc.CallOption
-	if n.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	fi, err := n.hc.WriteChunks(ctx, wchreq, opts...)
+	fi, err := n.hc.WriteChunks(ctx, wchreq)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -389,11 +390,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup}
 	sr := &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
 	log.Debugf("writing %v", sr)
-	var opts []grpc.CallOption
-	if n.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	fi, err := n.hc.WriteSparseDataChunk(ctx, sr, opts...)
+	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {
 		log.Error(err)
 		return err

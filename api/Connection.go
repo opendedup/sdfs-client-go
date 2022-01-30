@@ -22,12 +22,12 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	"github.com/pierrec/lz4/v4"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
-	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/security/advancedtls"
 	"google.golang.org/grpc/status"
@@ -59,6 +59,8 @@ type SdfsConnection struct {
 	Volumeid         int64
 	streamingClients map[int64]spb.FileIOService_StreamWriteClient
 	configLock       sync.RWMutex
+	Compress         bool
+	c                lz4.Compressor
 }
 
 // A Credentials Struct
@@ -109,7 +111,6 @@ type SdfsInterceptor struct {
 	credentials *Credentials
 	grpcSSL     bool
 	token       string
-	Compress    bool
 }
 
 func (n *SdfsInterceptor) clientInterceptor(
@@ -126,9 +127,6 @@ func (n *SdfsInterceptor) clientInterceptor(
 	// Calls the invoker to execute RPC
 	if method != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 		_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
-		if n.Compress {
-			opts = append(opts, grpc.UseCompressor(gzip.Name))
-		}
 		err := invoker(_ctx, method, req, reply, cc, opts...)
 		if status.Code(err) == codes.Unauthenticated {
 			n.token, err = n.authenicateUser()
@@ -146,12 +144,7 @@ func (n *SdfsInterceptor) clientInterceptor(
 		if Verbose && err != nil {
 			log.Errorf("authenticated status code %s for method %s", status.Code(err), method)
 		}
-
 		return err
-	}
-	if n.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-		log.Info("added compression")
 	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	log.Debugf("status code %s for method %s", status.Code(err), method)
@@ -164,9 +157,6 @@ func (n *SdfsInterceptor) clientInterceptor(
 func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// Logic before invoking the invoker
 	// Calls the invoker to execute RPC
-	if n.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
 	_ctx := metadata.AppendToOutgoingContext(ctx, "authorization", "bearer "+n.token)
 	s, err := streamer(_ctx, desc, cc, method, opts...)
 	if status.Code(err) == codes.Unauthenticated {
@@ -648,11 +638,11 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		} else {
 			tCreds = credentials.NewTLS(config)
 		}
-		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL, Compress: compress}
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
 		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(),
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize), grpc.UseCompressor(gzip.Name)),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
 			grpc.WithTransportCredentials(tCreds))
@@ -664,7 +654,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	} else {
 		log.Debugf("Connecting to %s \n", address)
 
-		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL, Compress: compress}
+		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
@@ -712,11 +702,11 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		SdfsInterceptor: interceptor,
 		Path:            zpath,
 		Volumeid:        volumeid,
+		Compress:        compress,
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
 		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, volumeid)
-		de.Compress = compress
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
@@ -824,11 +814,7 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 			return nil, err
 		}
 	}
-	var opts []grpc.CallOption
-	if n.SdfsInterceptor.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path), PvolumeID: n.Volumeid}, opts...)
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path), PvolumeID: n.Volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -841,12 +827,8 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 
 //ListDir lists a directory
 func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compact bool, returnsz int32) (string, []*spb.FileInfoResponse, error) {
-	var opts []grpc.CallOption
-	if n.SdfsInterceptor.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
 	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path),
-		NumberOfFiles: returnsz, Compact: false, ListGuid: marker, PvolumeID: n.Volumeid}, opts...)
+		NumberOfFiles: returnsz, Compact: false, ListGuid: marker, PvolumeID: n.Volumeid})
 	if err != nil {
 		log.Print(err)
 		return "", nil, err
@@ -1123,10 +1105,6 @@ func (n *SdfsConnection) SetMaxAge(ctx context.Context, maxAge int64) error {
 
 //GetXAttrSize gets the list size for attributes. This is useful for a fuse implementation
 func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path, key string) (int32, error) {
-	var opts []grpc.CallOption
-	if n.SdfsInterceptor.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
 	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: n.GetAbsPath(path), PvolumeID: n.Volumeid, Attr: key})
 	if err != nil {
 		log.Print(err)
@@ -1314,17 +1292,33 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	if n.DedupeEnabled {
 		return n.Dedupe.Write(fh, offset, data, length)
 	} else {
-		var opts []grpc.CallOption
-		if n.SdfsInterceptor.Compress {
-			opts = append(opts, grpc.UseCompressor(gzip.Name))
+		var fi *spb.DataWriteResponse
+		if n.Compress {
+			buf := make([]byte, lz4.CompressBlockBound(len(data)))
+
+			_, err := n.c.CompressBlock(data, buf)
+			if err != nil {
+				log.Error(err)
+				return err
+			}
+
+			fi, err = n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
+			if err != nil {
+				log.Print(err)
+				return err
+			} else if fi.GetErrorCode() > 0 {
+				return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+			}
+		} else {
+			fi, err = n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset, Compressed: false})
+			if err != nil {
+				log.Print(err)
+				return err
+			} else if fi.GetErrorCode() > 0 {
+				return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+			}
 		}
-		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset}, opts...)
-		if err != nil {
-			log.Error(err)
-			return err
-		} else if fi.GetErrorCode() > 0 {
-			return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
-		}
+
 		return nil
 	}
 }
@@ -1345,7 +1339,19 @@ func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte,
 			n.streamingClients[fh] = val
 			n.configLock.Unlock()
 			n.configLock.RLock()
-			val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
+			if n.Compress {
+				buf := make([]byte, lz4.CompressBlockBound(len(data)))
+
+				_, err := n.c.CompressBlock(data, buf)
+				if err != nil {
+					log.Print(err)
+					return err
+				}
+				val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
+			} else {
+				val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset, Compressed: false})
+			}
+
 			if err != nil {
 				log.Print(err)
 				return err
@@ -1366,10 +1372,19 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 	}
 	fi, err := n.fc.Read(ctx, &spb.DataReadRequest{PvolumeID: n.Volumeid, FileHandle: fh, Start: offset, Len: length})
 	if err != nil {
-		log.Error(err)
+		log.Print(err)
 		return data, err
 	} else if fi.GetErrorCode() > 0 {
 		return data, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	if fi.Compressed {
+		out := make([]byte, fi.Read)
+		_, err = lz4.UncompressBlock(fi.Data, out)
+		if err != nil {
+			log.Print(err)
+			return nil, err
+		}
+		return out, nil
 	}
 	return fi.Data, nil
 }
@@ -1495,11 +1510,7 @@ func (n *SdfsConnection) GetCloudMetaFile(ctx context.Context, path, dst string,
 
 //GetVolumeInfo returns the volume info
 func (n *SdfsConnection) GetVolumeInfo(ctx context.Context) (volumeInfo *spb.VolumeInfoResponse, err error) {
-	var opts []grpc.CallOption
-	if n.SdfsInterceptor.Compress {
-		opts = append(opts, grpc.UseCompressor(gzip.Name))
-	}
-	fi, err := n.vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: n.Volumeid}, opts...)
+	fi, err := n.vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: n.Volumeid})
 	if err != nil {
 		log.Print(err)
 		return nil, err
