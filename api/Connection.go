@@ -652,7 +652,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 
 		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(),
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize), grpc.UseCompressor(gzip.Name)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
 			grpc.WithTransportCredentials(tCreds))
