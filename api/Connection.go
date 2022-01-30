@@ -716,6 +716,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
 		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, volumeid)
+		de.Compress = compress
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
@@ -823,7 +824,11 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 			return nil, err
 		}
 	}
-	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path), PvolumeID: n.Volumeid})
+	var opts []grpc.CallOption
+	if n.SdfsInterceptor.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	fi, err := n.fc.Stat(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path), PvolumeID: n.Volumeid}, opts...)
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -836,8 +841,12 @@ func (n *SdfsConnection) Stat(ctx context.Context, path string) (*spb.FileInfoRe
 
 //ListDir lists a directory
 func (n *SdfsConnection) ListDir(ctx context.Context, path, marker string, compact bool, returnsz int32) (string, []*spb.FileInfoResponse, error) {
+	var opts []grpc.CallOption
+	if n.SdfsInterceptor.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
 	fi, err := n.fc.GetFileInfo(ctx, &spb.FileInfoRequest{FileName: n.GetAbsPath(path),
-		NumberOfFiles: returnsz, Compact: false, ListGuid: marker, PvolumeID: n.Volumeid})
+		NumberOfFiles: returnsz, Compact: false, ListGuid: marker, PvolumeID: n.Volumeid}, opts...)
 	if err != nil {
 		log.Print(err)
 		return "", nil, err
@@ -1114,6 +1123,10 @@ func (n *SdfsConnection) SetMaxAge(ctx context.Context, maxAge int64) error {
 
 //GetXAttrSize gets the list size for attributes. This is useful for a fuse implementation
 func (n *SdfsConnection) GetXAttrSize(ctx context.Context, path, key string) (int32, error) {
+	var opts []grpc.CallOption
+	if n.SdfsInterceptor.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
 	fi, err := n.fc.GetXAttrSize(ctx, &spb.GetXAttrSizeRequest{Path: n.GetAbsPath(path), PvolumeID: n.Volumeid, Attr: key})
 	if err != nil {
 		log.Print(err)
@@ -1301,7 +1314,11 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	if n.DedupeEnabled {
 		return n.Dedupe.Write(fh, offset, data, length)
 	} else {
-		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset})
+		var opts []grpc.CallOption
+		if n.SdfsInterceptor.Compress {
+			opts = append(opts, grpc.UseCompressor(gzip.Name))
+		}
+		fi, err := n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset}, opts...)
 		if err != nil {
 			log.Error(err)
 			return err
@@ -1478,7 +1495,11 @@ func (n *SdfsConnection) GetCloudMetaFile(ctx context.Context, path, dst string,
 
 //GetVolumeInfo returns the volume info
 func (n *SdfsConnection) GetVolumeInfo(ctx context.Context) (volumeInfo *spb.VolumeInfoResponse, err error) {
-	fi, err := n.vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: n.Volumeid})
+	var opts []grpc.CallOption
+	if n.SdfsInterceptor.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	fi, err := n.vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: n.Volumeid}, opts...)
 	if err != nil {
 		log.Print(err)
 		return nil, err

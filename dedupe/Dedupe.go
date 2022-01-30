@@ -17,6 +17,7 @@ import (
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 )
 
 type HashType int
@@ -126,7 +127,11 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 }
 
 func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoResponse, error) {
-	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID})
+	var opts []grpc.CallOption
+	if n.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID}, opts...)
 	if err != nil {
 		log.Print(err)
 		return nil, err
@@ -299,7 +304,11 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 		hes[i] = fingers[i].hash
 	}
 	chreq.Hashes = hes
-	fi, err := n.hc.CheckHashes(ctx, chreq)
+	var opts []grpc.CallOption
+	if n.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	fi, err := n.hc.CheckHashes(ctx, chreq, opts...)
 	if err != nil {
 		log.Errorf("error cheching hashes %v", err)
 		return nil, err
@@ -334,7 +343,11 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 
 	}
 	wchreq.Chunks = ces
-	fi, err := n.hc.WriteChunks(ctx, wchreq)
+	var opts []grpc.CallOption
+	if n.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	fi, err := n.hc.WriteChunks(ctx, wchreq, opts...)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -376,7 +389,11 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup}
 	sr := &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
 	log.Debugf("writing %v", sr)
-	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
+	var opts []grpc.CallOption
+	if n.Compress {
+		opts = append(opts, grpc.UseCompressor(gzip.Name))
+	}
+	fi, err := n.hc.WriteSparseDataChunk(ctx, sr, opts...)
 	if err != nil {
 		log.Error(err)
 		return err
