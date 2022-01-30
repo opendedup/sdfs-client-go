@@ -149,9 +149,7 @@ func (n *SdfsInterceptor) clientInterceptor(
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	log.Debugf("status code %s for method %s", status.Code(err), method)
 	return err
-
 	// Logic after invoking the invoker
-
 }
 
 func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
