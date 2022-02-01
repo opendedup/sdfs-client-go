@@ -60,7 +60,7 @@ type SdfsConnection struct {
 	streamingClients map[int64]spb.FileIOService_StreamWriteClient
 	configLock       sync.RWMutex
 	Compress         bool
-	c                lz4.Compressor
+	Compressor       lz4.Compressor
 }
 
 // A Credentials Struct
@@ -1294,7 +1294,7 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 		if n.Compress {
 			buf := make([]byte, lz4.CompressBlockBound(len(data)))
 
-			_, err := n.c.CompressBlock(data, buf)
+			_, err := n.Compressor.CompressBlock(data, buf)
 			if err != nil {
 				log.Error(err)
 				return err
@@ -1340,7 +1340,7 @@ func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte,
 			if n.Compress {
 				buf := make([]byte, lz4.CompressBlockBound(len(data)))
 
-				_, err := n.c.CompressBlock(data, buf)
+				_, err := n.Compressor.CompressBlock(data, buf)
 				if err != nil {
 					log.Print(err)
 					return err

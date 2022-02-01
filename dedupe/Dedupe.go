@@ -86,6 +86,19 @@ func (e *SdfsError) Error() string {
 	return fmt.Sprintf("SDFS Error %s %s", e.Err, e.ErrorCode)
 }
 
+var c lz4.Compressor
+
+func CompressData(data []byte) (cdata []byte, err error) {
+	cdata = make([]byte, lz4.CompressBlockBound(len(data)))
+
+	_, err = c.CompressBlock(data, cdata)
+	if err != nil {
+		log.Error(err)
+		return cdata, err
+	}
+	return cdata, nil
+}
+
 func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64) (*DedupeEngine, error) {
 	log.Out = os.Stdout
 	if debug {
