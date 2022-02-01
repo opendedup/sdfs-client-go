@@ -704,7 +704,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, volumeid)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, compress, volumeid)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
