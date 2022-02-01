@@ -99,6 +99,16 @@ func CompressData(data []byte) (cdata []byte, err error) {
 	return cdata, nil
 }
 
+func DecompressData(data []byte, len int32) (ddata []byte, err error) {
+	ddata = make([]byte, len)
+	_, err = lz4.UncompressBlock(data, ddata)
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	}
+	return ddata, nil
+}
+
 func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64) (*DedupeEngine, error) {
 	log.Out = os.Stdout
 	if debug {
