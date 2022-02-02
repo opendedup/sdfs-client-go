@@ -1291,7 +1291,7 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 		return n.Dedupe.Write(fh, offset, data, length)
 	} else {
 		var fi *spb.DataWriteResponse
-		if n.Compress {
+		if n.Compress && len(data) > 10 {
 			buf := make([]byte, lz4.CompressBlockBound(len(data)))
 
 			_, err := n.Compressor.CompressBlock(data, buf)
@@ -1337,7 +1337,7 @@ func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte,
 			n.streamingClients[fh] = val
 			n.configLock.Unlock()
 			n.configLock.RLock()
-			if n.Compress {
+			if n.Compress && len(data) > 10 {
 				buf := make([]byte, lz4.CompressBlockBound(len(data)))
 
 				_, err := n.Compressor.CompressBlock(data, buf)
