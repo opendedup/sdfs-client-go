@@ -348,7 +348,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
-			if n.Compress {
+			if n.Compress && len(fingers[i].data) > 10 {
 				buf := make([]byte, lz4.CompressBlockBound(len(fingers[i].data)))
 
 				_, err := n.c.CompressBlock(fingers[i].data, buf)
