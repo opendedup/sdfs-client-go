@@ -45,7 +45,6 @@ type DedupeEngine struct {
 	pVolumeID   int64
 	bufferSize  int
 	Compress    bool
-	c           lz4.Compressor
 }
 
 type DedupeBuffer struct {
@@ -91,12 +90,12 @@ var c lz4.Compressor
 func CompressData(data []byte) (cdata []byte, err error) {
 	cdata = make([]byte, lz4.CompressBlockBound(len(data)))
 
-	_, err = c.CompressBlock(data, cdata)
+	len, err := c.CompressBlock(data, cdata)
 	if err != nil {
 		log.Error(err)
 		return cdata, err
 	}
-	return cdata, nil
+	return cdata[:len], nil
 }
 
 func DecompressData(data []byte, len int32) (ddata []byte, err error) {
@@ -349,15 +348,19 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
 			if n.Compress && len(fingers[i].data) > 10 {
-				buf := make([]byte, lz4.CompressBlockBound(len(fingers[i].data)))
-
-				_, err := n.c.CompressBlock(fingers[i].data, buf)
+				buf, err := CompressData(fingers[i].data)
 				if err != nil {
 					log.Error(err)
 					return nil, err
 				}
-				ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: buf, Compressed: true, CompressedLength: int32(len(fingers[i].data))}
-				ces[i] = ce
+				if len(buf) > len(fingers[i].data) {
+					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
+					ces[i] = ce
+				} else {
+					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: buf, Compressed: true, CompressedLength: int32(len(fingers[i].data))}
+					ces[i] = ce
+				}
+
 			} else {
 				ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
 				ces[i] = ce

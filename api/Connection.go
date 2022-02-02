@@ -22,7 +22,6 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
-	"github.com/pierrec/lz4/v4"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -60,7 +59,6 @@ type SdfsConnection struct {
 	streamingClients map[int64]spb.FileIOService_StreamWriteClient
 	configLock       sync.RWMutex
 	Compress         bool
-	Compressor       lz4.Compressor
 }
 
 // A Credentials Struct
@@ -1292,15 +1290,17 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	} else {
 		var fi *spb.DataWriteResponse
 		if n.Compress && len(data) > 10 {
-			buf := make([]byte, lz4.CompressBlockBound(len(data)))
 
-			_, err := n.Compressor.CompressBlock(data, buf)
+			comp, err := dedupe.CompressData(data)
 			if err != nil {
 				log.Error(err)
 				return err
 			}
-
-			fi, err = n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
+			if len(comp) > len(data) {
+				fi, err = n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset, Compressed: false})
+			} else {
+				fi, err = n.fc.Write(ctx, &spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: comp, Len: length, Start: offset, Compressed: true})
+			}
 			if err != nil {
 				log.Print(err)
 				return err
@@ -1338,14 +1338,17 @@ func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte,
 			n.configLock.Unlock()
 			n.configLock.RLock()
 			if n.Compress && len(data) > 10 {
-				buf := make([]byte, lz4.CompressBlockBound(len(data)))
-
-				_, err := n.Compressor.CompressBlock(data, buf)
+				comp, err := dedupe.CompressData(data)
 				if err != nil {
-					log.Print(err)
+					log.Error(err)
 					return err
 				}
-				val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: buf, Len: length, Start: offset, Compressed: true})
+				if len(comp) > len(data) {
+
+					val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset, Compressed: false})
+				} else {
+					val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: comp, Len: length, Start: offset, Compressed: true})
+				}
 			} else {
 				val.Send(&spb.DataWriteRequest{PvolumeID: n.Volumeid, FileHandle: fh, Data: data, Len: length, Start: offset, Compressed: false})
 			}
@@ -1376,8 +1379,7 @@ func (n *SdfsConnection) Read(ctx context.Context, fh int64, offset int64, lengt
 		return data, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	if fi.Compressed {
-		out := make([]byte, fi.Read)
-		_, err = lz4.UncompressBlock(fi.Data, out)
+		out, err := dedupe.DecompressData(fi.Data, fi.Read)
 		if err != nil {
 			log.Print(err)
 			return nil, err
