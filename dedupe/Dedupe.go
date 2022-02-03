@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -339,6 +338,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
 		if val, err := n.ddcache.Get(sEnc); err != notFound {
 			fingers[i].archive = val.(int64)
+			fingers[i].dedup = true
 			log.Debugf("cache hit")
 		} else {
 
@@ -353,27 +353,31 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 
 	}
 	chreq.Hashes = hes
-	fi, err := n.hc.CheckHashes(ctx, chreq)
-	if err != nil {
-		log.Errorf("error cheching hashes %v", err)
-		return nil, err
-	} else if fi.GetErrorCode() > 0 {
-		log.Errorf("error checking hashes error : %s , error code: %s", fi.Error, fi.ErrorCode)
-		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
-	}
-	log.Debugf("check hashes %d", len(hes))
-	for i := 0; i < len(fi.Locations); i++ {
-		hs := hes[i]
-		sEnc := b64.StdEncoding.EncodeToString(hs)
-		val, ok := hm[sEnc]
-		if !ok {
-			return nil, fmt.Errorf("unable to find %s", sEnc)
+	if len(hes) > 0 {
+		fi, err := n.hc.CheckHashes(ctx, chreq)
+		if err != nil {
+			log.Errorf("error cheching hashes %v", err)
+			return nil, err
+		} else if fi.GetErrorCode() > 0 {
+			log.Errorf("error checking hashes error : %s , error code: %s", fi.Error, fi.ErrorCode)
+			return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 		}
-		for _, s := range val {
-			fingers[s].archive = fi.Locations[i]
-			if fingers[i].archive != -1 {
-				fingers[i].dedup = true
-				n.ddcache.Set(sEnc, fingers[i].archive)
+
+		log.Debugf("check hashes %d", len(hes))
+
+		for i := 0; i < len(fi.Locations); i++ {
+			hs := hes[i]
+			sEnc := b64.StdEncoding.EncodeToString(hs)
+			val, ok := hm[sEnc]
+			if !ok {
+				return nil, fmt.Errorf("unable to find %s", sEnc)
+			}
+			for _, s := range val {
+				fingers[s].archive = fi.Locations[i]
+				if fingers[i].archive != -1 {
+					fingers[i].dedup = true
+					n.ddcache.Set(sEnc, fingers[i].archive)
+				}
 			}
 		}
 	}
@@ -468,7 +472,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		log.Errorf("error writing sparse chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	log.Debugf("wrote %v", sr)
+	//log.Debugf("wrote %v", sr)
 	return nil
 
 }
@@ -604,7 +608,7 @@ func (j *Job) Do() {
 				hash32 := sha256.Sum256(finger.data)
 				finger.hash = hash32[:]
 			}
-			log.Debugf("hash is %s length is %d", hex.EncodeToString(finger.hash), clen)
+			//log.Debugf("hash is %s length is %d", hex.EncodeToString(finger.hash), clen)
 			fingers = append(fingers, finger)
 			nextPos += int32(clen)
 		}
