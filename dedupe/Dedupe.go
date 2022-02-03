@@ -395,7 +395,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 			if n.Compress && len(fingers[i].data) > 10 {
 				buf, err := CompressData(fingers[i].data)
 				if err != nil {
-					log.Error(err)
+					log.Errorf("error compressing chunks %v", err)
 					return nil, err
 				}
 				if len(buf) > len(fingers[i].data) {
@@ -416,23 +416,25 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 			log.Warnf("found null data at %d arlen %d", i, len(fingers))
 		}
 	}
-	wchreq.Chunks = ces
-	fi, err := n.hc.WriteChunks(ctx, wchreq)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	} else if fi.GetErrorCode() > 0 {
-		log.Errorf("error writing chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
-		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
-	}
-	for i := 0; i < len(fi.InsertRecords); i++ {
-		z := hl[i]
-		if !fingers[z].dedup {
-			fingers[z].archive = fi.InsertRecords[i].Hashloc
-			fingers[z].dedup = !fi.InsertRecords[i].Inserted
-			if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
-				log.Warnf("Archive should not be -1")
-				return nil, fmt.Errorf("archive should not be -1")
+	if len(ces) > 0 {
+		wchreq.Chunks = ces
+		fi, err := n.hc.WriteChunks(ctx, wchreq)
+		if err != nil {
+			log.Errorf("error during writechunk api call %v", err)
+			return nil, err
+		} else if fi.GetErrorCode() > 0 {
+			log.Errorf("error writing chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
+			return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		}
+		for i := 0; i < len(fi.InsertRecords); i++ {
+			z := hl[i]
+			if !fingers[z].dedup {
+				fingers[z].archive = fi.InsertRecords[i].Hashloc
+				fingers[z].dedup = !fi.InsertRecords[i].Inserted
+				if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
+					log.Warnf("Archive should not be -1")
+					return nil, fmt.Errorf("archive should not be -1")
+				}
 			}
 		}
 	}
@@ -464,7 +466,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	if n.Compress {
 		out, err := proto.Marshal(sdc)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("error during sparsedata chunk marshalling %v", err)
 			return err
 		}
 		chunk, err := CompressData(out)
@@ -488,7 +490,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	log.Debugf("writing sdc %d", len(pairs))
 	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("error while writing chunk %v", err)
 		return err
 	} else if fi.GetErrorCode() > 0 {
 		log.Errorf("error writing sparse chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
@@ -612,7 +614,7 @@ func (j *Job) Do() {
 			if err == io.EOF || clen == 0 {
 				break
 			} else if err != nil {
-				log.Error(err)
+				log.Errorf("error while in job %v", err)
 				j.engine.mu.Lock()
 				file, ok := j.engine.openFiles[j.buffer.fileName]
 				j.engine.mu.Unlock()
@@ -636,7 +638,7 @@ func (j *Job) Do() {
 		}
 		fingers, err := j.engine.CheckHashes(ctx, fingers)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("error while checking hashes %v", err)
 			j.engine.mu.Lock()
 			file, ok := j.engine.openFiles[j.buffer.fileName]
 			j.engine.mu.Unlock()
@@ -648,7 +650,7 @@ func (j *Job) Do() {
 
 		fingers, err = j.engine.WriteChunks(ctx, fingers, j.buffer.fileHandle)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("error while writing chunks %v", err)
 			j.engine.mu.Lock()
 			file, ok := j.engine.openFiles[j.buffer.fileName]
 			j.engine.mu.Unlock()
@@ -659,6 +661,7 @@ func (j *Job) Do() {
 		}
 		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit)
 		if err != nil {
+			log.Errorf("error while writing sparse chunks %v", err)
 			log.Error(err)
 			j.engine.mu.Lock()
 			file, ok := j.engine.openFiles[j.buffer.fileName]
