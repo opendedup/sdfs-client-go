@@ -337,6 +337,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
 		if val, err := n.ddcache.Get(sEnc); err != notFound {
 			fingers[i].archive = val.(int64)
+			log.Debugf("cache hit")
 		} else {
 
 			val, ok := hm[sEnc]
