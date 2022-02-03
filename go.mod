@@ -5,6 +5,7 @@ go 1.13
 require (
 	cloud.google.com/go/pubsub v1.13.0 // indirect
 	github.com/Microsoft/go-winio v0.5.0 // indirect
+	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
 	github.com/ahmetask/worker v1.3.1
 	github.com/containerd/containerd v1.5.2 // indirect

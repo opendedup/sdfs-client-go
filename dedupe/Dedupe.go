@@ -10,7 +10,11 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
+	b64 "encoding/base64"
+
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/ahmetask/worker"
 	lru "github.com/hashicorp/golang-lru"
 	rabin "github.com/opendedup/go-rabin/rabin"
@@ -45,6 +49,7 @@ type DedupeEngine struct {
 	pVolumeID   int64
 	bufferSize  int
 	Compress    bool
+	ddcache     *ttlcache.Cache
 }
 
 type DedupeBuffer struct {
@@ -133,7 +138,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		return nil, fmt.Errorf("unsupported hashtype")
 	}
 	log.Debugf("hashing info %v", fi)
-	return &DedupeEngine{
+	dd := &DedupeEngine{
 		openFiles:   make(map[string]*DedupeFile),
 		fileHandles: make(map[int64]*DedupeFile),
 		hc:          hc,
@@ -147,7 +152,12 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		pVolumeID:   volumeid,
 		bufferSize:  size,
 		Compress:    compressed,
-	}, nil
+		ddcache:     ttlcache.NewCache(),
+	}
+	dd.ddcache.SetTTL(time.Duration(15 * time.Minute))
+	dd.ddcache.SetCacheSizeLimit(4000)
+
+	return dd, nil
 }
 
 func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoResponse, error) {
@@ -317,11 +327,27 @@ func (n *DedupeEngine) SyncFile(fileName string) error {
 	return nil
 }
 
+var notFound = ttlcache.ErrNotFound
+
 func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*Finger, error) {
 	chreq := &spb.CheckHashesRequest{PvolumeID: n.pVolumeID}
-	hes := make([][]byte, len(fingers))
+	hes := make([][]byte, 0)
+	hm := make(map[string][]int)
 	for i := 0; i < len(fingers); i++ {
-		hes[i] = fingers[i].hash
+		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
+		if val, err := n.ddcache.Get(sEnc); err != notFound {
+			fingers[i].archive = val.(int64)
+		} else {
+
+			val, ok := hm[sEnc]
+			if !ok {
+				val = make([]int, 0)
+			}
+			val = append(val, i)
+			hm[sEnc] = val
+			hes = append(hes, fingers[i].hash)
+		}
+
 	}
 	chreq.Hashes = hes
 	fi, err := n.hc.CheckHashes(ctx, chreq)
@@ -334,9 +360,18 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 	}
 	log.Debugf("check hashes %v", fi)
 	for i := 0; i < len(fi.Locations); i++ {
-		fingers[i].archive = fi.Locations[i]
-		if fingers[i].archive != -1 {
-			fingers[i].dedup = true
+		hs := hes[i]
+		sEnc := b64.StdEncoding.EncodeToString(hs)
+		val, ok := hm[sEnc]
+		if !ok {
+			return nil, fmt.Errorf("unable to find %s", sEnc)
+		}
+		for _, s := range val {
+			fingers[s].archive = fi.Locations[i]
+			if fingers[i].archive != -1 {
+				fingers[i].dedup = true
+				n.ddcache.Set(sEnc, fingers[i].archive)
+			}
 		}
 	}
 	return fingers, nil
