@@ -330,6 +330,8 @@ func (n *DedupeEngine) SyncFile(fileName string) error {
 var notFound = ttlcache.ErrNotFound
 
 func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*Finger, error) {
+	log.Debug("in checking hashes")
+	defer log.Debug("done checking hashes")
 	chreq := &spb.CheckHashesRequest{PvolumeID: n.pVolumeID}
 	hes := make([][]byte, 0)
 	hm := make(map[string][]int)
@@ -359,7 +361,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 		log.Errorf("error checking hashes error : %s , error code: %s", fi.Error, fi.ErrorCode)
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	log.Debugf("check hashes %v", fi)
+	log.Debugf("check hashes %d", len(hes))
 	for i := 0; i < len(fi.Locations); i++ {
 		hs := hes[i]
 		sEnc := b64.StdEncoding.EncodeToString(hs)
@@ -379,6 +381,8 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 }
 
 func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64) ([]*Finger, error) {
+	log.Debug("in write chunks")
+	defer log.Debug("done writing chunks")
 	ces := make([]*spb.ChunkEntry, len(fingers))
 	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
 	for i := 0; i < len(fingers); i++ {
@@ -434,6 +438,8 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 }
 
 func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Finger, fileHandle, fileLocation int64, length int32) error {
+	log.Debug("in write sparse chunks")
+	defer log.Debug("done writing sparse chunks")
 	pairs := make(map[int32]*spb.HashLocPairP)
 	var dup int32
 	for i := 0; i < len(fingers); i++ {
@@ -453,7 +459,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	}
 	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup}
 	sr := &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
-	log.Debugf("writing %v", sr)
+	log.Debugf("writing sdc %d", len(pairs))
 	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {
 		log.Error(err)
