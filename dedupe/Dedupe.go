@@ -473,12 +473,20 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		if err != nil {
 			log.Errorf("error out = %d, %v", err)
 			sr = &spb.SparseDedupeChunkWriteRequest{
-				Chunk:           sdc,
+				Chunk:        sdc,
+				FileHandle:   fileHandle,
+				FileLocation: fileLocation,
+				PvolumeID:    n.pVolumeID,
+				Compressed:   false,
+			}
+		} else {
+			sr = &spb.SparseDedupeChunkWriteRequest{
 				FileHandle:      fileHandle,
 				FileLocation:    fileLocation,
 				PvolumeID:       n.pVolumeID,
-				Compressed:      false,
-				CompressedChunk: out,
+				Compressed:      true,
+				CompressedChunk: chunk,
+				UncompressedLen: int32(len(out)),
 			}
 		}
 
