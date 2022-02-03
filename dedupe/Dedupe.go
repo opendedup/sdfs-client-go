@@ -15,6 +15,7 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/ahmetask/worker"
+	"github.com/golang/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
 	rabin "github.com/opendedup/go-rabin/rabin"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -461,7 +462,32 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		}
 	}
 	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup}
-	sr := &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
+	var sr *spb.SparseDedupeChunkWriteRequest
+	if n.Compress {
+		out, err := proto.Marshal(sdc)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		chunk, err := CompressData(out)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		sr = &spb.SparseDedupeChunkWriteRequest{
+			Chunk:           sdc,
+			FileHandle:      fileHandle,
+			FileLocation:    fileLocation,
+			PvolumeID:       n.pVolumeID,
+			Compressed:      true,
+			CompressedChunk: chunk,
+			UncompressedLen: int32(len(out)),
+		}
+		log.Debugf("compressed sdc from %d to %d", len(out), len(chunk))
+
+	} else {
+		sr = &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
+	}
 	log.Debugf("writing sdc %d", len(pairs))
 	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {
