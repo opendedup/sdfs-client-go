@@ -428,8 +428,8 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	for i := 0; i < len(fi.InsertRecords); i++ {
 		z := hl[i]
 		if !fingers[z].dedup {
-			fingers[z].archive = fi.InsertRecords[z].Hashloc
-			fingers[z].dedup = !fi.InsertRecords[z].Inserted
+			fingers[z].archive = fi.InsertRecords[i].Hashloc
+			fingers[z].dedup = !fi.InsertRecords[i].Inserted
 			if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
 				log.Warnf("Archive should not be -1")
 				return nil, fmt.Errorf("archive should not be -1")

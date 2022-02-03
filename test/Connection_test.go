@@ -1237,6 +1237,16 @@ func makeFile(t *testing.T, parent string, size int64, dedupe bool) (string, []b
 	return b, bo
 }
 
+func makeBlankFile(t *testing.T, parent string, size int64, dedupe bool) (string, []byte) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, dedupe, true)
+	defer connection.CloseConnection(ctx)
+	assert.NotNil(t, connection)
+	b, bo, _ := makeGenericBlankFile(ctx, t, connection, parent, size)
+	return b, bo
+}
+
 func makeLargeBlockFile(t *testing.T, parent string, size int64, dedupe bool, blocksize int) (string, []byte) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1319,6 +1329,55 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConn
 			blockSz = int(maxoffset - offset)
 		}
 		b := randBytesMaskImpr(blockSz)
+		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
+		h.Write(b)
+		assert.Nil(t, err)
+		if err != nil {
+			return "", make([]byte, 0), err
+		}
+		offset += int64(len(b))
+		b = nil
+	}
+	stat, err = connection.GetAttr(ctx, fn)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	assert.Equal(t, stat.Size, maxoffset)
+	_ = connection.Release(ctx, fh)
+	return fn, h.Sum(nil), nil
+}
+
+func makeGenericBlankFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64) (string, []byte, error) {
+	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
+	err := connection.MkNod(ctx, fn, 511, 0)
+	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	stat, err := connection.GetAttr(ctx, fn)
+	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	assert.Equal(t, stat.Mode, int32(511))
+	fh, err := connection.Open(ctx, fn, 0)
+	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	maxoffset := size
+	offset := int64(0)
+	h, err := blake2b.New(32, make([]byte, 0))
+	assert.Nil(t, err)
+	if err != nil {
+		return "", make([]byte, 0), err
+	}
+	blockSz := 1024 * 32
+	for offset < maxoffset {
+		if blockSz > int(maxoffset-offset) {
+			blockSz = int(maxoffset - offset)
+		}
+		b := make([]byte, blockSz)
 		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
 		h.Write(b)
 		assert.Nil(t, err)
