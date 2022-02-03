@@ -387,7 +387,8 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64) ([]*Finger, error) {
 	log.Debug("in write chunks")
 	defer log.Debug("done writing chunks")
-	ces := make([]*spb.ChunkEntry, len(fingers))
+	ces := make([]*spb.ChunkEntry, 0)
+	hl := make([]int, 0)
 	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
@@ -399,25 +400,21 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 				}
 				if len(buf) > len(fingers[i].data) {
 					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
-					ces[i] = ce
+					ces = append(ces, ce)
 				} else {
 					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: buf, Compressed: true, CompressedLength: int32(len(fingers[i].data))}
-					ces[i] = ce
+					ces = append(ces, ce)
 				}
 
 			} else {
 				ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
-				ces[i] = ce
+				ces = append(ces, ce)
 			}
-
-		} else {
-			ce := &spb.ChunkEntry{}
-			ces[i] = ce
+			hl = append(hl, i)
 		}
 		if len(fingers[i].data) == 0 {
 			log.Warnf("found null data at %d arlen %d", i, len(fingers))
 		}
-
 	}
 	wchreq.Chunks = ces
 	fi, err := n.hc.WriteChunks(ctx, wchreq)
@@ -429,10 +426,11 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	for i := 0; i < len(fi.InsertRecords); i++ {
-		if !fingers[i].dedup {
-			fingers[i].archive = fi.InsertRecords[i].Hashloc
-			fingers[i].dedup = !fi.InsertRecords[i].Inserted
-			if fingers[i].archive == -1 && len(fingers[i].data) > 0 {
+		z := hl[i]
+		if !fingers[z].dedup {
+			fingers[z].archive = fi.InsertRecords[z].Hashloc
+			fingers[z].dedup = !fi.InsertRecords[z].Inserted
+			if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
 				log.Warnf("Archive should not be -1")
 				return nil, fmt.Errorf("archive should not be -1")
 			}
