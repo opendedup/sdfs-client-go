@@ -339,7 +339,6 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 		if val, err := n.ddcache.Get(sEnc); err != notFound {
 			fingers[i].archive = val.(int64)
 			fingers[i].dedup = true
-			log.Debugf("cache hit")
 		} else {
 
 			val, ok := hm[sEnc]
