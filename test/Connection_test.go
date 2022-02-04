@@ -1410,16 +1410,27 @@ func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *ap
 	h, err := blake2b.New(32, make([]byte, 0))
 	assert.Nil(t, err)
 	blockSz := 1024 * blocksize
+	ninja := randBytesMaskImpr(blockSz)
+	ct := 0
 	for offset < maxoffset {
 		if blockSz > int(maxoffset-offset) {
 			blockSz = int(maxoffset - offset)
 		}
-		b := randBytesMaskImpr(blockSz)
-		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
-		h.Write(b)
-		assert.Nil(t, err)
-		offset += int64(len(b))
-		b = nil
+		if ct == 4 {
+			err = connection.Write(ctx, fh, ninja, offset, int32(len(ninja)))
+			h.Write(ninja)
+			assert.Nil(t, err)
+			offset += int64(len(ninja))
+			ct = 0
+		} else {
+			b := randBytesMaskImpr(blockSz)
+			err = connection.Write(ctx, fh, b, offset, int32(len(b)))
+			h.Write(b)
+			assert.Nil(t, err)
+			offset += int64(len(b))
+			b = nil
+			ct++
+		}
 	}
 	stat, _ = connection.GetAttr(ctx, fn)
 	assert.Equal(t, stat.Size, maxoffset)
@@ -1483,7 +1494,7 @@ func deleteFile(t *testing.T, fn string) {
 
 func connect(t *testing.T, dedupe bool, compress bool) *api.SdfsConnection {
 	api.DisableTrust = true
-	api.Debug = false
+	api.Debug = true
 	connection, err := api.NewConnection(address, dedupe, compress, -1)
 
 	if err != nil {

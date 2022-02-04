@@ -15,13 +15,13 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/ahmetask/worker"
-	"github.com/golang/protobuf/proto"
 	lru "github.com/hashicorp/golang-lru"
 	rabin "github.com/opendedup/go-rabin/rabin"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"github.com/pierrec/lz4/v4"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type HashType int
@@ -90,9 +90,8 @@ func (e *SdfsError) Error() string {
 	return fmt.Sprintf("SDFS Error %s %s", e.Err, e.ErrorCode)
 }
 
-var c lz4.Compressor
-
 func CompressData(data []byte) (cdata []byte, err error) {
+	var c lz4.Compressor
 	cdata = make([]byte, lz4.CompressBlockBound(len(data)))
 
 	len, err := c.CompressBlock(data, cdata)
@@ -396,9 +395,8 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 				buf, err := CompressData(fingers[i].data)
 				if err != nil {
 					log.Errorf("error compressing chunks %v", err)
-					return nil, err
 				}
-				if len(buf) > len(fingers[i].data) {
+				if len(buf) > len(fingers[i].data) || err != nil {
 					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
 					ces = append(ces, ce)
 				} else {
@@ -495,7 +493,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	} else {
 		sr = &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
 	}
-	log.Debugf("writing sdc %d", len(pairs))
+	log.Debugf("writing sdc %d at position %d", len(pairs), sr.FileLocation)
 	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {
 		log.Errorf("error while writing chunk %v", err)

@@ -105,15 +105,17 @@ func TestDedupeWriteBuffer(t *testing.T) {
 func TestDedupeWriteLargeFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	connection := connect(t, true, true)
+	connection := connect(t, true, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, hash := makeLargeBlockFile(t, "", 768*1024, true, 1024)
+	fn, hash := makeLargeBlockFile(t, "", 1024*1024*1000, true, 1024)
 	nhash := readFile(t, fn, false)
 	assert.Equal(t, hash, nhash)
-
+	stat, _ := connection.Stat(ctx, fn)
+	t.Logf("stat = %v", stat)
 	err := connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
+
 }
 
 func TestDedupeReWriteFile(t *testing.T) {
