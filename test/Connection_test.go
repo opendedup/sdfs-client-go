@@ -661,12 +661,12 @@ func TestSetVolumeSize(t *testing.T) {
 }
 
 func connectN(t *testing.T, addr string, tries int) (*api.SdfsConnection, error) {
-	connection, err := api.NewConnection(addr, false, false, -1)
+	connection, err := api.NewConnection(addr, false, false, -1, -1, -1)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(10 * time.Second)
-		connection, err = api.NewConnection(addr, false, false, -1)
+		connection, err = api.NewConnection(addr, false, false, -1, -1, -1)
 		if retrys > tries {
 			break
 		} else {
@@ -791,12 +791,12 @@ func TestCloud(t *testing.T) {
 	assert.Nil(t, err)
 	address = "sdfss://localhost:6443"
 
-	connection, err := api.NewConnection(address, false, false, -1)
+	connection, err := api.NewConnection(address, false, false, -1, -1, -1)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address, false, false, -1)
+		connection, err = api.NewConnection(address, false, false, -1, -1, -1)
 		if retrys > 10 {
 			break
 		} else {
@@ -885,7 +885,7 @@ func cloudFileTest(t *testing.T) {
 	connection := connect(t, false, true)
 	assert.NotNil(t, connection)
 
-	nconnection, err := api.NewConnection("sdfss://localhost:6444", false, false, -1)
+	nconnection, err := api.NewConnection("sdfss://localhost:6444", false, false, -1, -1, -1)
 	assert.Nil(t, err)
 	defer nconnection.CloseConnection(ctx)
 	defer connection.CloseConnection(ctx)
@@ -1017,13 +1017,13 @@ func cleanStore(t *testing.T, dur int) {
 
 func TestCert(t *testing.T) {
 	api.DisableTrust = false
-	connection, err := api.NewConnection(address, false, false, -1)
+	connection, err := api.NewConnection(address, false, false, -1, -1, -1)
 	assert.NotNil(t, err)
 	assert.Nil(t, connection)
 	err = api.AddTrustedCert(address)
 	assert.Nil(t, err)
 	api.DisableTrust = false
-	connection, err = api.NewConnection(address, false, false, -1)
+	connection, err = api.NewConnection(address, false, false, -1, -1, -1)
 	assert.NotNil(t, connection)
 	assert.Nil(t, err)
 	user, err := user.Current()
@@ -1099,12 +1099,12 @@ func TestMain(m *testing.M) {
 	api.DisableTrust = true
 	api.Password = password
 	api.UserName = "admin"
-	connection, err := api.NewConnection(address, false, false, -1)
+	connection, err := api.NewConnection(address, false, false, -1, -1, -1)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address, false, false, -1)
+		connection, err = api.NewConnection(address, false, false, -1, -1, -1)
 		if retrys > 10 {
 			break
 		} else {
@@ -1495,7 +1495,7 @@ func deleteFile(t *testing.T, fn string) {
 func connect(t *testing.T, dedupe bool, compress bool) *api.SdfsConnection {
 	api.DisableTrust = true
 	api.Debug = true
-	connection, err := api.NewConnection(address, dedupe, compress, -1)
+	connection, err := api.NewConnection(address, dedupe, compress, -1, 40000, 60)
 
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)

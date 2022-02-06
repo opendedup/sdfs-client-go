@@ -516,7 +516,7 @@ func getCert(address string) (*x509.Certificate, error) {
 }
 
 //NewConnection Created a new connection given a path
-func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int64) (*SdfsConnection, error) {
+func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int64, cacheSize int, cacheDuration int) (*SdfsConnection, error) {
 	var address string
 	var useSSL bool
 	u, err := xnet.ParseURL(path)
@@ -702,7 +702,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, compress, volumeid)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, compress, volumeid, cacheSize, cacheDuration)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err

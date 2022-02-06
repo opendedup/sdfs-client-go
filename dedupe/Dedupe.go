@@ -50,7 +50,6 @@ type DedupeEngine struct {
 	bufferSize  int
 	Compress    bool
 	ddcache     *ttlcache.Cache
-	cacheLock   sync.RWMutex
 }
 
 type DedupeBuffer struct {
@@ -113,7 +112,7 @@ func DecompressData(data []byte, len int32) (ddata []byte, err error) {
 	return ddata, nil
 }
 
-func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64) (*DedupeEngine, error) {
+func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64, cacheSize int, cacheDuration int) (*DedupeEngine, error) {
 	log.Out = os.Stdout
 	if debug {
 		log.SetLevel(logrus.DebugLevel)
@@ -154,8 +153,8 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		Compress:    compressed,
 		ddcache:     ttlcache.NewCache(),
 	}
-	dd.ddcache.SetTTL(time.Duration(60 * time.Minute))
-	dd.ddcache.SetCacheSizeLimit(4000000)
+	dd.ddcache.SetTTL(time.Duration(time.Duration(cacheDuration) * time.Minute))
+	dd.ddcache.SetCacheSizeLimit(cacheSize)
 
 	return dd, nil
 }
@@ -337,7 +336,6 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 	hm := make(map[string][]int)
 	for i := 0; i < len(fingers); i++ {
 		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
-		n.cacheLock.RLock()
 		if val, err := n.ddcache.Get(sEnc); err != notFound {
 			fingers[i].archive = val.(int64)
 			fingers[i].dedup = true
@@ -351,7 +349,6 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 			hm[sEnc] = val
 			hes = append(hes, fingers[i].hash)
 		}
-		n.cacheLock.RUnlock()
 
 	}
 	chreq.Hashes = hes
@@ -377,11 +374,9 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 			for _, s := range val {
 				fingers[s].archive = fi.Locations[i]
 				if fingers[i].archive != -1 {
-					n.cacheLock.Lock()
 					fingers[i].dedup = true
 					loc := fingers[s].archive
 					n.ddcache.Set(sEnc, loc)
-					n.cacheLock.Unlock()
 				}
 			}
 		}

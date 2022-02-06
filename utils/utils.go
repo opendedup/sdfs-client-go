@@ -80,6 +80,8 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	dedupe := flagSet.Bool("dedupe", false, "Enable Client Side Dedupe")
 	volumeid := flagSet.Int64("volumeID", -1, "The volume id to connect to. Required for access through proxy")
 	nocompress := flagSet.Bool("nocompress", false, "Compress api traffic")
+	cachsize := flagSet.Int("dedupe-cache-size", 400000, "Cache size for client size dedupe")
+	cachage := flagSet.Int("dedupe-cache-age", 30, "Maximum age for local dedupe cache")
 	flagSet.Parse(os.Args[2:])
 
 	if !IsFlagPassed("address", flagSet) {
@@ -120,7 +122,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 		pb.Mtls = *mtls
 	}
 	//fmt.Printf("Connecting to %s\n", *address)
-	connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, *volumeid)
+	connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, *volumeid, *cachsize, *cachage)
 	if err != nil {
 		fmt.Printf("Unable to connect to %s error: %v\n", *address, err)
 		os.Exit(1)
