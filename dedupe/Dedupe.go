@@ -50,6 +50,7 @@ type DedupeEngine struct {
 	bufferSize  int
 	Compress    bool
 	ddcache     *ttlcache.Cache
+	cacheLock   sync.RWMutex
 }
 
 type DedupeBuffer struct {
@@ -326,6 +327,8 @@ func (n *DedupeEngine) SyncFile(fileName string) error {
 	return nil
 }
 
+var notFound = ttlcache.ErrNotFound
+
 func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*Finger, error) {
 	log.Debug("in checking hashes")
 	defer log.Debug("done checking hashes")
@@ -334,14 +337,21 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 	hm := make(map[string][]int)
 	for i := 0; i < len(fingers); i++ {
 		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
+		n.cacheLock.RLock()
+		if val, err := n.ddcache.Get(sEnc); err != notFound {
+			fingers[i].archive = val.(int64)
+			fingers[i].dedup = true
+		} else {
 
-		val, ok := hm[sEnc]
-		if !ok {
-			val = make([]int, 0)
+			val, ok := hm[sEnc]
+			if !ok {
+				val = make([]int, 0)
+			}
+			val = append(val, i)
+			hm[sEnc] = val
+			hes = append(hes, fingers[i].hash)
 		}
-		val = append(val, i)
-		hm[sEnc] = val
-		hes = append(hes, fingers[i].hash)
+		n.cacheLock.RUnlock()
 
 	}
 	chreq.Hashes = hes
@@ -367,7 +377,11 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 			for _, s := range val {
 				fingers[s].archive = fi.Locations[i]
 				if fingers[i].archive != -1 {
+					n.cacheLock.Lock()
 					fingers[i].dedup = true
+					loc := fingers[i].archive
+					n.ddcache.Set(sEnc, loc)
+					n.cacheLock.Unlock()
 				}
 			}
 		}
