@@ -379,7 +379,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 				if fingers[i].archive != -1 {
 					n.cacheLock.Lock()
 					fingers[i].dedup = true
-					loc := fingers[i].archive
+					loc := fingers[s].archive
 					n.ddcache.Set(sEnc, loc)
 					n.cacheLock.Unlock()
 				}
