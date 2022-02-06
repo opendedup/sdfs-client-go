@@ -154,8 +154,8 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		Compress:    compressed,
 		ddcache:     ttlcache.NewCache(),
 	}
-	dd.ddcache.SetTTL(time.Duration(15 * time.Minute))
-	dd.ddcache.SetCacheSizeLimit(400000)
+	dd.ddcache.SetTTL(time.Duration(60 * time.Minute))
+	dd.ddcache.SetCacheSizeLimit(4000000)
 
 	return dd, nil
 }
