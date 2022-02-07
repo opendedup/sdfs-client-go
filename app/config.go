@@ -27,6 +27,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	kage := flagSet.Int64("max-key-age", -1, "Sets the maximum age of a deduplication entry that can be referenced. If set to -1 the age is infinite.")
 	vinfo := flagSet.Bool("volume", false, "Returns Volume Info")
 	vvinfo := flagSet.Bool("proxy-volumes", false, "Returns A List of Proxied Volumes")
+	vvreload := flagSet.Bool("proxy-volumes-reload", false, "Reloads Proxied Volumes")
 	dinfo := flagSet.Bool("dse", false, "Returns Dedupe Storage Info")
 	sinfo := flagSet.Bool("system", false, "System Info")
 	gcsecd := flagSet.Bool("gc-schedule", false, "Returns The Garbage Collection Schedule")
@@ -194,6 +195,15 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 
 		}
 		table.Render()
+		return
+	}
+	if *vvreload {
+		_, err := connection.ReloadProxyConfig(ctx)
+		if err != nil {
+			fmt.Printf("Unable to reload volumes error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Reloaded Volumes\n")
 		return
 	}
 	if *sinfo {
