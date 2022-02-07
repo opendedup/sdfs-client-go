@@ -46,10 +46,10 @@ type DedupeEngine struct {
 	rabinTable  *rabin.Table
 	pool        *worker.Pool
 	mu          sync.Mutex
-	pVolumeID   int64
 	bufferSize  int
 	Compress    bool
 	ddcache     *ttlcache.Cache
+	pVolumeID   int64
 }
 
 type DedupeBuffer struct {
@@ -71,6 +71,7 @@ type DedupeFile struct {
 	fileHandles     map[int64]bool
 	fileName        string
 	err             error
+	pVolumeID       int64
 }
 
 type Job struct {
@@ -170,7 +171,7 @@ func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoRespons
 	return fi, nil
 }
 
-func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
+func (n *DedupeEngine) Open(fileName string, fileHandle int64, volumeID int64) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -181,6 +182,7 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64) error {
 			fileHandles:     make(map[int64]bool),
 			fileName:        fileName,
 			flushingBuffers: make(map[int64]*DedupeBuffer),
+			pVolumeID:       volumeID,
 		}
 		onEvicted := func(k interface{}, v interface{}) {
 			buffer := v.(*DedupeBuffer)
@@ -328,10 +330,10 @@ func (n *DedupeEngine) SyncFile(fileName string) error {
 
 var notFound = ttlcache.ErrNotFound
 
-func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*Finger, error) {
+func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volumeID int64) ([]*Finger, error) {
 	log.Debug("in checking hashes")
 	defer log.Debug("done checking hashes")
-	chreq := &spb.CheckHashesRequest{PvolumeID: n.pVolumeID}
+	chreq := &spb.CheckHashesRequest{PvolumeID: volumeID}
 	hes := make([][]byte, 0)
 	hm := make(map[string][]int)
 	for i := 0; i < len(fingers); i++ {
@@ -384,7 +386,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger) ([]*F
 	return fingers, nil
 }
 
-func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64) ([]*Finger, error) {
+func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64, volumeID int64) ([]*Finger, error) {
 	log.Debug("in write chunks")
 	defer log.Debug("done writing chunks")
 	ces := make([]*spb.ChunkEntry, 0)
@@ -440,7 +442,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	return fingers, nil
 }
 
-func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Finger, fileHandle, fileLocation int64, length int32) error {
+func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Finger, fileHandle, fileLocation int64, length int32, volumeID int64) error {
 	log.Debug("in write sparse chunks")
 	defer log.Debug("done writing sparse chunks")
 	pairs := make(map[int32]*spb.HashLocPairP)
@@ -643,7 +645,7 @@ func (j *Job) Do() {
 			fingers = append(fingers, finger)
 			nextPos += int32(clen)
 		}
-		fingers, err := j.engine.CheckHashes(ctx, fingers)
+		fingers, err := j.engine.CheckHashes(ctx, fingers, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while checking hashes %v", err)
 			j.engine.mu.Lock()
@@ -655,7 +657,7 @@ func (j *Job) Do() {
 			return
 		}
 
-		fingers, err = j.engine.WriteChunks(ctx, fingers, j.buffer.fileHandle)
+		fingers, err = j.engine.WriteChunks(ctx, fingers, j.buffer.fileHandle, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing chunks %v", err)
 			j.engine.mu.Lock()
@@ -666,7 +668,7 @@ func (j *Job) Do() {
 			}
 			return
 		}
-		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit)
+		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing sparse chunks %v", err)
 			log.Error(err)

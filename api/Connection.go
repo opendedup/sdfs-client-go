@@ -1447,7 +1447,7 @@ func (n *SdfsConnection) Open(ctx context.Context, path string, flags int32) (fh
 		return fh, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	if n.DedupeEnabled {
-		n.Dedupe.Open(n.GetAbsPath(path), fi.FileHandle)
+		n.Dedupe.Open(n.GetAbsPath(path), fi.FileHandle, n.Volumeid)
 	}
 	return fi.FileHandle, nil
 }
