@@ -391,7 +391,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	defer log.Debug("done writing chunks")
 	ces := make([]*spb.ChunkEntry, 0)
 	hl := make([]int, 0)
-	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: n.pVolumeID}
+	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: volumeID}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
 			if n.Compress && len(fingers[i].data) > 10 {
