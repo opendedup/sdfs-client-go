@@ -36,7 +36,7 @@ const (
 
 type DedupeEngine struct {
 	openFiles   map[string]*DedupeFile
-	fileHandles map[int64]*DedupeFile
+	fileHandles map[string]*DedupeFile
 	connection  *grpc.ClientConn
 	chunkSize   int64
 	hashType    HashType
@@ -113,6 +113,14 @@ func DecompressData(data []byte, len int32) (ddata []byte, err error) {
 	return ddata, nil
 }
 
+func getGUID(fh, volumeID int64) string {
+	return fmt.Sprintf("%d-%d", volumeID, fh)
+}
+
+func getFileGuid(file string, volumeID int64) string {
+	return fmt.Sprintf("%s-%d", file, volumeID)
+}
+
 func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64, cacheSize int, cacheDuration int) (*DedupeEngine, error) {
 	log.Out = os.Stdout
 	if debug {
@@ -140,7 +148,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 	log.Debugf("hashing info %v", fi)
 	dd := &DedupeEngine{
 		openFiles:   make(map[string]*DedupeFile),
-		fileHandles: make(map[int64]*DedupeFile),
+		fileHandles: make(map[string]*DedupeFile),
 		hc:          hc,
 		connection:  connection,
 		chunkSize:   fi.ChunkSize,
@@ -175,7 +183,7 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64, volumeID int64) e
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	file, ok := n.openFiles[fileName]
+	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
 	if !ok {
 
 		file = &DedupeFile{
@@ -200,18 +208,18 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64, volumeID int64) e
 		}
 		file.cache = l
 
-		n.openFiles[fileName] = file
+		n.openFiles[getFileGuid(fileName, volumeID)] = file
 	}
 	file.mu.Lock()
 	file.fileHandles[fileHandle] = true
 	file.mu.Unlock()
-	n.fileHandles[fileHandle] = file
+	n.fileHandles[getGUID(fileHandle, volumeID)] = file
 	return nil
 }
 
-func (n *DedupeEngine) Sync(fileHandle int64) error {
+func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 	n.mu.Lock()
-	file, ok := n.fileHandles[fileHandle]
+	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 	n.mu.Unlock()
 
 	if ok {
@@ -243,21 +251,21 @@ func (n *DedupeEngine) Sync(fileHandle int64) error {
 	return nil
 }
 
-func (n *DedupeEngine) Close(fileHandle int64) error {
-	n.Sync(fileHandle)
+func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
+	n.Sync(fileHandle, volumeID)
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	file, ok := n.fileHandles[fileHandle]
+	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 
 	if ok {
-		delete(n.fileHandles, fileHandle)
+		delete(n.fileHandles, getGUID(fileHandle, volumeID))
 		file.mu.Lock()
 		defer file.mu.Unlock()
 		delete(file.fileHandles, fileHandle)
 		m := len(file.fileHandles)
 		if m == 0 {
-			delete(n.openFiles, file.fileName)
+			delete(n.openFiles, getFileGuid(file.fileName, volumeID))
 		}
 		if file.err != nil {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
@@ -268,17 +276,17 @@ func (n *DedupeEngine) Close(fileHandle int64) error {
 	return nil
 }
 
-func (n *DedupeEngine) CloseFile(fileName string) error {
-	n.SyncFile(fileName)
+func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
+	n.SyncFile(fileName, volumeID)
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	file, ok := n.openFiles[fileName]
+	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
 
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
 		for k, _ := range file.fileHandles {
-			delete(n.fileHandles, k)
+			delete(n.fileHandles, getGUID(k, file.pVolumeID))
 		}
 		delete(n.openFiles, file.fileName)
 		if file.err != nil {
@@ -292,9 +300,9 @@ func (n *DedupeEngine) CloseFile(fileName string) error {
 
 }
 
-func (n *DedupeEngine) SyncFile(fileName string) error {
+func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 	n.mu.Lock()
-	file, ok := n.openFiles[fileName]
+	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
 
 	n.mu.Unlock()
 
@@ -477,14 +485,14 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 				Chunk:        sdc,
 				FileHandle:   fileHandle,
 				FileLocation: fileLocation,
-				PvolumeID:    n.pVolumeID,
+				PvolumeID:    volumeID,
 				Compressed:   false,
 			}
 		} else {
 			sr = &spb.SparseDedupeChunkWriteRequest{
 				FileHandle:      fileHandle,
 				FileLocation:    fileLocation,
-				PvolumeID:       n.pVolumeID,
+				PvolumeID:       volumeID,
 				Compressed:      true,
 				CompressedChunk: chunk,
 				UncompressedLen: int32(len(out)),
@@ -510,9 +518,9 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 
 }
 
-func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length int32) error {
+func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length int32, volumeID int64) error {
 	log.Debugf("Writing at offset %d len %d", offset, length)
-	file, ok := n.fileHandles[fileHandle]
+	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 	if !ok {
 		log.Errorf("filehandle not found %d", fileHandle)
 		return fmt.Errorf("filehandle not found %d", fileHandle)
@@ -625,7 +633,7 @@ func (j *Job) Do() {
 			} else if err != nil {
 				log.Errorf("error while in job %v", err)
 				j.engine.mu.Lock()
-				file, ok := j.engine.openFiles[j.buffer.fileName]
+				file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
 				j.engine.mu.Unlock()
 				if ok {
 					file.err = err
@@ -649,7 +657,7 @@ func (j *Job) Do() {
 		if err != nil {
 			log.Errorf("error while checking hashes %v", err)
 			j.engine.mu.Lock()
-			file, ok := j.engine.openFiles[j.buffer.fileName]
+			file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
 			j.engine.mu.Unlock()
 			if ok {
 				file.err = err
@@ -661,7 +669,7 @@ func (j *Job) Do() {
 		if err != nil {
 			log.Errorf("error while writing chunks %v", err)
 			j.engine.mu.Lock()
-			file, ok := j.engine.openFiles[j.buffer.fileName]
+			file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
 			j.engine.mu.Unlock()
 			if ok {
 				file.err = err
@@ -673,7 +681,7 @@ func (j *Job) Do() {
 			log.Errorf("error while writing sparse chunks %v", err)
 			log.Error(err)
 			j.engine.mu.Lock()
-			file, ok := j.engine.openFiles[j.buffer.fileName]
+			file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
 			j.engine.mu.Unlock()
 			if ok {
 				file.err = err
