@@ -502,7 +502,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		log.Debugf("compressed sdc from %d to %d", len(out), len(chunk))
 
 	} else {
-		sr = &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: n.pVolumeID}
+		sr = &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: volumeID}
 	}
 	log.Debugf("writing sdc %d at position %d", len(pairs), sr.FileLocation)
 	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
@@ -522,8 +522,8 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 	log.Debugf("Writing at offset %d len %d", offset, length)
 	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 	if !ok {
-		log.Errorf("filehandle not found %d", fileHandle)
-		return fmt.Errorf("filehandle not found %d", fileHandle)
+		log.Errorf("filehandle not found %s", getGUID(fileHandle, volumeID))
+		return fmt.Errorf("filehandle not found %s", getGUID(fileHandle, volumeID))
 	}
 	if file.err != nil {
 		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
