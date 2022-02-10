@@ -734,15 +734,15 @@ func (n *SdfsConnection) ValidateCertificate(ctx context.Context, hash string) (
 	}
 }
 
-func (n *SdfsConnection) ExportServerCertificate(ctx context.Context) (certChainFilePath string, privateKeyFilePath string, err error) {
+func (n *SdfsConnection) ExportServerCertificate(ctx context.Context) (certChain []byte, privateKey []byte, err error) {
 	rc, err := n.ec.ExportServerCertificate(ctx, &spb.ExportServerCertRequest{})
 	if err != nil {
 		log.Print(err)
-		return certChainFilePath, privateKeyFilePath, err
+		return certChain, privateKey, err
 	} else if rc.GetErrorCode() > 0 {
-		return certChainFilePath, privateKeyFilePath, &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
+		return certChain, privateKey, &SdfsError{Err: rc.GetError(), ErrorCode: rc.GetErrorCode()}
 	} else {
-		return rc.CertChainFilePath, rc.PrivateKeyFilePath, nil
+		return rc.CertChain, rc.PrivateKey, nil
 	}
 }
 
