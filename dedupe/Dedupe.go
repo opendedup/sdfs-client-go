@@ -346,7 +346,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volum
 	hm := make(map[string][]int)
 	for i := 0; i < len(fingers); i++ {
 		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
-		if val, err := n.ddcache.Get(sEnc); err != notFound {
+		if val, err := n.ddcache.Get(getFileGuid(sEnc, volumeID)); err != notFound {
 			fingers[i].archive = val.(int64)
 			fingers[i].dedup = true
 		} else {
@@ -386,7 +386,7 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volum
 				if fingers[i].archive != -1 {
 					fingers[i].dedup = true
 					loc := fingers[s].archive
-					n.ddcache.Set(sEnc, loc)
+					n.ddcache.Set(getFileGuid(sEnc, volumeID), loc)
 				}
 			}
 		}
