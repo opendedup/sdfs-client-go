@@ -611,6 +611,24 @@ type Finger struct {
 }
 
 func (j *Job) Do() {
+	var err error
+	for i := 1; i < 5; i++ {
+		err = runDedupe(j)
+		if err != nil {
+			j.engine.mu.Lock()
+			j.engine.ddcache.Purge()
+			j.engine.mu.Unlock()
+		} else {
+			break
+		}
+	}
+	if err != nil {
+		j.file.err = err
+	}
+}
+
+func runDedupe(j *Job) error {
+
 	ctx, cancel := context.WithCancel(context.Background())
 	if j.wg != nil {
 		defer j.wg.Done()
@@ -631,14 +649,8 @@ func (j *Job) Do() {
 			if err == io.EOF || clen == 0 {
 				break
 			} else if err != nil {
-				log.Errorf("error while in job %v", err)
-				j.engine.mu.Lock()
-				file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
-				j.engine.mu.Unlock()
-				if ok {
-					file.err = err
-				}
-				return
+				log.Errorf("error while in deduping chunks %v", err)
+				return err
 			}
 			er := nextPos + int32(clen)
 			finger := &Finger{data: j.buffer.buffer[nextPos:er], start: nextPos, len: clen}
@@ -656,37 +668,19 @@ func (j *Job) Do() {
 		fingers, err := j.engine.CheckHashes(ctx, fingers, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while checking hashes %v", err)
-			j.engine.mu.Lock()
-			file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
-			j.engine.mu.Unlock()
-			if ok {
-				file.err = err
-			}
-			return
+			return err
 		}
 
 		fingers, err = j.engine.WriteChunks(ctx, fingers, j.buffer.fileHandle, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing chunks %v", err)
-			j.engine.mu.Lock()
-			file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
-			j.engine.mu.Unlock()
-			if ok {
-				file.err = err
-			}
-			return
+			return err
 		}
 		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing sparse chunks %v", err)
 			log.Error(err)
-			j.engine.mu.Lock()
-			file, ok := j.engine.openFiles[getFileGuid(j.buffer.fileName, j.file.pVolumeID)]
-			j.engine.mu.Unlock()
-			if ok {
-				file.err = err
-			}
-			return
+			return err
 		}
 		j.file.flushMu.Lock()
 		delete(j.file.flushingBuffers, j.buffer.offset)
@@ -694,5 +688,6 @@ func (j *Job) Do() {
 		j.buffer.Flushing = false
 		j.buffer.Flushed = true
 	}
+	return nil
 
 }

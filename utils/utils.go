@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	pb "github.com/opendedup/sdfs-client-go/api"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -82,6 +83,7 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 	nocompress := flagSet.Bool("nocompress", false, "Compress api traffic")
 	cachsize := flagSet.Int("dedupe-cache-size", 400000, "Cache size for client size dedupe")
 	cachage := flagSet.Int("dedupe-cache-age", 30, "Maximum age for local dedupe cache")
+	debug := flagSet.Bool("debug", false, "Set debug output")
 	flagSet.Parse(os.Args[2:])
 
 	if !IsFlagPassed("address", flagSet) {
@@ -112,6 +114,9 @@ func ParseAndConnect(flagSet *flag.FlagSet) *pb.SdfsConnection {
 		pb.UserName = *u
 		pb.Password = *pwd
 
+	}
+	if *debug {
+		log.SetLevel(log.DebugLevel)
 	}
 	if *disableTrust {
 		//fmt.Println("TLS Verification Disabled")
