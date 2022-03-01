@@ -182,7 +182,10 @@ func (n *SdfsInterceptor) clientStreamInterceptor(ctx context.Context, desc *grp
 
 //CloseConnection closes the grpc connection to the volume
 func (n *SdfsConnection) CloseConnection(ctx context.Context) error {
-	return n.Clnt.Close()
+	if n.Clnt != nil {
+		return n.Clnt.Close()
+	}
+	return nil
 }
 
 func (n *SdfsConnection) GetProxyVolumes(ctx context.Context) (*spb.ProxyVolumeInfoResponse, error) {
