@@ -1827,7 +1827,7 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string, blockSiz
 	}
 	defer n.fc.Release(ctx, &spb.FileCloseRequest{PvolumeID: n.Volumeid, FileHandle: rd.GetFileHandle()})
 	var read int64 = 0
-	var blocksize int32 = int32(blockSize * 1024)
+	var blocksize int64 = int64(blockSize) * int64(1024)
 	var length = fi.GetResponse()[0].Size
 	writer, err := os.Create(dst)
 	if err != nil {
@@ -1835,14 +1835,14 @@ func (n *SdfsConnection) Download(ctx context.Context, src, dst string, blockSiz
 	}
 	defer writer.Close()
 	for read < length {
-		if blocksize > int32(length-read) {
-			blocksize = int32(length - read)
+		if blocksize > (length - read) {
+			blocksize = (length - read)
 		}
 		if blocksize == 0 {
 			break
 		}
 		//log(" reading at  %d len %d\n", read, blocksize)
-		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{PvolumeID: n.Volumeid, FileHandle: rd.GetFileHandle(), Len: blocksize, Start: read})
+		rdr, err := n.fc.Read(ctx, &spb.DataReadRequest{PvolumeID: n.Volumeid, FileHandle: rd.GetFileHandle(), Len: int32(blocksize), Start: read})
 		if err != nil {
 
 			return -1, err
