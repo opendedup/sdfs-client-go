@@ -308,10 +308,6 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			os.Exit(1)
 		}
 		data := [][]string{
-			{"Cache Size Formatted", utils.FormatSize(dInfo.CacheSize)},
-			{"Cache Size Bytes", strconv.FormatInt(dInfo.CacheSize, 10)},
-			{"Max Cache Size Formatted", utils.FormatSize(dInfo.MaxCacheSize)},
-			{"Max Cache Size Bytes", strconv.FormatInt(dInfo.MaxCacheSize, 10)},
 			{"Current Size Formatted", utils.FormatSize(dInfo.CurrentSize)},
 			{"Current Size Bytes", strconv.FormatInt(dInfo.CurrentSize, 10)},
 			{"Compressed Size Formatted", utils.FormatSize(dInfo.CompressedSize)},
@@ -329,6 +325,20 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			{"Read Speed", fmt.Sprintf("%d KB/s", dInfo.ReadSpeed)},
 			{"Write Speed", fmt.Sprintf("%d KB/s", dInfo.WriteSpeed)},
 			{"Max Key Age", fmt.Sprintf("%d ms", dInfo.MaxAge)},
+			{"Cache Avg Load Penalty", fmt.Sprintf("%f%%", dInfo.AverageLoadPenalty*100)},
+			{"Cache Eviction Count", fmt.Sprintf("%d", dInfo.EvictionCount)},
+			{"Cache Hit Count", fmt.Sprintf("%d", dInfo.HitCount)},
+			{"Cache Hit Rate", fmt.Sprintf("%f%%", dInfo.HitRate*100)},
+			{"Cache Load Exception Count", fmt.Sprintf("%d", dInfo.LoadExceptionCount)},
+			{"Cache Load Exception Rate", fmt.Sprintf("%f%%", dInfo.LoadExceptionRate*100)},
+			{"Cache Miss Count", fmt.Sprintf("%d", dInfo.MissCount)},
+			{"Cache Miss Rate", fmt.Sprintf("%f%%", dInfo.MissRate*100)},
+			{"Cache Request Count", fmt.Sprintf("%d", dInfo.RequestCount)},
+			{"Cache Total Load Time", fmt.Sprintf("%d", dInfo.TotalLoadTime)},
+			{"Cache Size Formatted", utils.FormatSize(dInfo.CacheSize)},
+			{"Cache Size Bytes", strconv.FormatInt(dInfo.CacheSize, 10)},
+			{"Max Cache Size Formatted", utils.FormatSize(dInfo.MaxCacheSize)},
+			{"Max Cache Size Bytes", strconv.FormatInt(dInfo.MaxCacheSize, 10)},
 		}
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"DSE Info", ""})
