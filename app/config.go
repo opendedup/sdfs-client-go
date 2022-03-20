@@ -325,7 +325,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			{"Read Speed", fmt.Sprintf("%d KB/s", dInfo.ReadSpeed)},
 			{"Write Speed", fmt.Sprintf("%d KB/s", dInfo.WriteSpeed)},
 			{"Max Key Age", fmt.Sprintf("%d ms", dInfo.MaxAge)},
-			{"Cache Avg Load Penalty", fmt.Sprintf("%f%%", dInfo.AverageLoadPenalty*100)},
+			{"Cache Avg Load Penalty (ns)", fmt.Sprintf("%f", dInfo.AverageLoadPenalty)},
 			{"Cache Eviction Count", fmt.Sprintf("%d", dInfo.EvictionCount)},
 			{"Cache Hit Count", fmt.Sprintf("%d", dInfo.HitCount)},
 			{"Cache Hit Rate", fmt.Sprintf("%f%%", dInfo.HitRate*100)},
