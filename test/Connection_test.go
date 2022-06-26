@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"net/url"
 	"os/user"
 	"runtime"
 
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	network "github.com/docker/docker/api/types/network"
@@ -555,6 +557,7 @@ func TestGCSchedule(t *testing.T) {
 	t.Logf("GC Sched = %s", gc)
 }
 
+/*
 func TestSetPassword(t *testing.T) {
 	cli, _ := client.NewClientWithOpts(client.FromEnv)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -614,6 +617,7 @@ func TestSetPassword(t *testing.T) {
 	}
 
 }
+*/
 
 func TestCache(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -693,7 +697,7 @@ func TestCloudSync(t *testing.T) {
 	cmd := []string{"server", "/data"}
 	_, err = runContainer(cli, mimagename, containername, portopening, portopening, inputEnv, cmd)
 	assert.Nil(t, err)
-	containername = string(randBytesMaskImpr(16))
+	containername = "s36443"
 	portopening = "6442"
 	nport := "6443"
 	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
@@ -705,7 +709,7 @@ func TestCloudSync(t *testing.T) {
 		fmt.Printf("Unable to create docker client %v", err)
 	}
 	assert.Nil(t, err)
-	acontainername := string(randBytesMaskImpr(16))
+	acontainername := "s36444"
 	portopening = "6442"
 	nport = "6444"
 	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
@@ -750,7 +754,7 @@ func TestCloudSync(t *testing.T) {
 	stopAndRemoveContainer(cli, acontainername)
 }
 
-func TestCloud(t *testing.T) {
+func TestS3Cloud(t *testing.T) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	assert.Nil(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -765,7 +769,7 @@ func TestCloud(t *testing.T) {
 	_, err = runContainer(cli, mimagename, containername, portopening, portopening, inputEnv, cmd)
 	assert.Nil(t, err)
 
-	containername = string(randBytesMaskImpr(16))
+	containername = "s36443"
 	portopening = "6442"
 	nport := "6443"
 	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
@@ -777,7 +781,7 @@ func TestCloud(t *testing.T) {
 		fmt.Printf("Unable to create docker client %v", err)
 	}
 	assert.Nil(t, err)
-	acontainername := string(randBytesMaskImpr(16))
+	acontainername := "s36444"
 	portopening = "6442"
 	nport = "6444"
 	inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
@@ -828,6 +832,104 @@ func TestCloud(t *testing.T) {
 	})
 	address = "sdfss://localhost:6442"
 	stopAndRemoveContainer(cli, "minio")
+	stopAndRemoveContainer(cli, containername)
+	stopAndRemoveContainer(cli, acontainername)
+}
+
+func TestAzureCloud(t *testing.T) {
+	ctx := context.Background()
+	credential, err := azblob.NewSharedKeyCredential(os.Getenv("AZURE_ACCESS_KEY"), os.Getenv("AZURE_SECRET_KEY"))
+	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", os.Getenv("AZURE_ACCESS_KEY")))
+	serviceURL := azblob.NewServiceURL(*u, p)
+	containerURL := serviceURL.NewContainerURL(os.Getenv("AZURE_BUCKET_NAME"))
+	for marker := (azblob.Marker{}); marker.NotDone(); { // The parens around Marker{} are required to avoid compiler error.
+		// Get a result segment starting with the blob indicated by the current Marker.
+		listBlob, err := containerURL.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{})
+		if err != nil {
+			log.Fatal(err)
+		}
+		// IMPORTANT: ListBlobs returns the start of the next segment; you MUST use this to get
+		// the next segment (after processing the current result segment).
+		marker = listBlob.NextMarker
+
+		// Process the blobs returned in this result segment (if the segment is empty, the loop body won't execute)
+		for _, blobInfo := range listBlob.Segment.BlobItems {
+			t.Log("Deleted Blob name: " + blobInfo.Name + "\n")
+			blobURL := containerURL.NewBlockBlobURL(blobInfo.Name)
+			_, err = blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	assert.Nil(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli.NegotiateAPIVersion(ctx)
+	containername := "azure6443"
+	portopening := "6442"
+	nport := "6443"
+	inputEnv := []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cmd := []string{}
+	_, err = runContainer(cli, imagename, containername, nport, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	assert.Nil(t, err)
+	acontainername := "azure6444"
+	portopening = "6442"
+	nport = "6444"
+	inputEnv = []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cmd = []string{}
+	_, err = runContainer(cli, imagename, acontainername, nport, portopening, inputEnv, cmd)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+	}
+	assert.Nil(t, err)
+	address = "sdfss://localhost:6443"
+
+	connection, err := api.NewConnection(address, false, false, -1, -1, -1)
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address, false, false, -1, -1, -1)
+		if retrys > 10 {
+			break
+		} else {
+			retrys++
+		}
+	}
+	assert.NotNil(t, connection)
+	connection.CloseConnection(ctx)
+	t.Run("AzureTest", func(t *testing.T) {
+		TestNewConnection(t)
+		TestChow(t)
+		TestMkNod(t)
+		TestMkDir(t)
+		TestMkDirAll(t)
+		cleanStore(t, 80)
+		TestCopyExtent(t)
+		TestCopyFile(t)
+		TestEvents(t)
+		TestInfo(t)
+		TestListDir(t)
+		TestRename(t)
+		TestSetUtime(t)
+		TestStatFS(t)
+		TestSymLink(t)
+		TestTuncate(t)
+		TestXAttrs(t)
+		cloudInfoTest(t)
+		cloudFileTest(t)
+	})
+	address = "sdfss://localhost:6442"
 	stopAndRemoveContainer(cli, containername)
 	stopAndRemoveContainer(cli, acontainername)
 }
@@ -996,6 +1098,7 @@ func cleanStore(t *testing.T, dur int) {
 		files = append(files, fn)
 	}
 	_nfn, nh := makeFile(t, "", 1024*1024, false)
+	time.Sleep(10 * time.Second)
 	info, err := connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	sz := info.CurrentSize
@@ -1081,7 +1184,7 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cli.NegotiateAPIVersion(ctx)
 	defer cancel()
-	containername := string(randBytesMaskImpr(16))
+	containername := "local6442"
 	_, cc := os.LookupEnv("TEST_NO_CREATE_CONTAINER")
 	if runtime.GOOS != "windows" && !cc {
 		if err != nil {

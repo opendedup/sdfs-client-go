@@ -1727,8 +1727,8 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
 	tmpname := path.Join(sdfsTempFolder, u.String())
-	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: sdfsTempFolder})
-	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: tmpname})
+	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: sdfsTempFolder, Mode: 511})
+	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: tmpname, Mode: 511})
 	if err != nil {
 		log.Errorf("error in mknod %d %s", n.Volumeid, tmpname)
 		return -1, err
@@ -1775,7 +1775,12 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 			}
 		}
 	}
-
+	//log.Infof("fn = %s", n.GetAbsPath(tmpname))
+	_, err = n.Stat(ctx, n.GetAbsPath(tmpname))
+	if err != nil {
+		log.Errorf("error in stat temp file %d %s %v", n.Volumeid, dst, err)
+		return -1, err
+	}
 	n.Release(ctx, fh)
 	dir := path.Dir(n.GetAbsPath(dst))
 	if dir != "" {
@@ -1789,13 +1794,11 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 		}
 	}
 	n.Unlink(ctx, dst)
-
 	err = n.Rename(ctx, tmpname, n.GetAbsPath(dst))
 	if err != nil {
 		log.Errorf("error in rename %d %s", n.Volumeid, dst)
 		return -1, err
 	}
-
 	fi, err := n.Stat(ctx, n.GetAbsPath(dst))
 	if err != nil {
 		log.Errorf("error in stat %d %s", n.Volumeid, dst)

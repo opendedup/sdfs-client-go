@@ -1,9 +1,10 @@
 module github.com/opendedup/sdfs-client-go
 
-go 1.13
+go 1.18
 
 require (
 	cloud.google.com/go/pubsub v1.18.0
+	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
@@ -29,10 +30,10 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	golang.org/x/net v0.0.0-20210521195947-fe42d452be8f // indirect
+	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88
+	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
 	google.golang.org/grpc v1.40.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20220209221444-a354b1eec350
 	google.golang.org/protobuf v1.27.1
