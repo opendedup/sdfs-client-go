@@ -9,7 +9,7 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
 	github.com/ahmetask/worker v1.3.1
-	github.com/containerd/containerd v1.5.9 // indirect
+	github.com/containerd/containerd v1.5.13 // indirect
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/go-ole/go-ole v1.2.5 // indirect
