@@ -12,4 +12,5 @@ RUN  \
      cd /go/sdfs-client-go && \
      mkdir -p /go/sdfs-client-go/build
 WORKDIR /go/sdfs-client-go/
+RUN go mod tidy
 RUN make clean && make build
