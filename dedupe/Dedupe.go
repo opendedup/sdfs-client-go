@@ -243,6 +243,10 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 			}
 			wg.Wait()
 		}
+		for len(file.flushingBuffers) > 0 {
+			time.Sleep(10 * time.Millisecond)
+			log.Debugf("waiting for filehandle to flush %d", fileHandle)
+		}
 		if file.err != nil {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
 			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
@@ -327,6 +331,10 @@ func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 				}
 			}
 			wg.Wait()
+			for len(file.flushingBuffers) > 0 {
+				time.Sleep(10 * time.Millisecond)
+				log.Debugf("waiting for filehandle to flush %s", fileName)
+			}
 		}
 		if file.err != nil {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
