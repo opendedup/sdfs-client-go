@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -523,6 +524,8 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	var address string
 	var useSSL bool
 	u, err := xnet.ParseURL(path)
+	log.SetReportCaller(true)
+
 	if err != nil {
 		return nil, err
 	}
@@ -705,7 +708,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 4, 8, Debug, compress, volumeid, cacheSize, cacheDuration)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 2, runtime.NumCPU(), Debug, compress, volumeid, cacheSize, cacheDuration)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err

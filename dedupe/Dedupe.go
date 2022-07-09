@@ -48,8 +48,8 @@ type DedupeEngine struct {
 	mu          sync.Mutex
 	bufferSize  int
 	Compress    bool
-	ddcache     *ttlcache.Cache
-	pVolumeID   int64
+	//ddcache     *ttlcache.Cache
+	pVolumeID int64
 }
 
 type DedupeBuffer struct {
@@ -92,6 +92,8 @@ func (e *SdfsError) Error() string {
 }
 
 func CompressData(data []byte) (cdata []byte, err error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	var c lz4.Compressor
 	cdata = make([]byte, lz4.CompressBlockBound(len(data)))
 
@@ -104,6 +106,8 @@ func CompressData(data []byte) (cdata []byte, err error) {
 }
 
 func DecompressData(data []byte, len int32) (ddata []byte, err error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	ddata = make([]byte, len)
 	_, err = lz4.UncompressBlock(data, ddata)
 	if err != nil {
@@ -122,7 +126,9 @@ func getFileGuid(file string, volumeID int64) string {
 }
 
 func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64, cacheSize int, cacheDuration int) (*DedupeEngine, error) {
-	log.Out = os.Stdout
+	log.SetReportCaller(true)
+	log.SetOutput(os.Stdout)
+
 	if debug {
 		log.SetLevel(logrus.DebugLevel)
 	}
@@ -160,18 +166,20 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		pVolumeID:   volumeid,
 		bufferSize:  size,
 		Compress:    compressed,
-		ddcache:     ttlcache.NewCache(),
+		//ddcache:     ttlcache.NewCache(),
 	}
-	dd.ddcache.SetTTL(time.Duration(time.Duration(cacheDuration) * time.Minute))
-	dd.ddcache.SetCacheSizeLimit(cacheSize)
+	//dd.ddcache.SetTTL(time.Duration(time.Duration(cacheDuration) * time.Minute))
+	//dd.ddcache.SetCacheSizeLimit(cacheSize)
 
 	return dd, nil
 }
 
 func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID})
 	if err != nil {
-		log.Print(err)
+		log.Error(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
@@ -180,6 +188,8 @@ func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoRespons
 }
 
 func (n *DedupeEngine) Open(fileName string, fileHandle int64, volumeID int64) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -218,6 +228,8 @@ func (n *DedupeEngine) Open(fileName string, fileHandle int64, volumeID int64) e
 }
 
 func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	n.mu.Lock()
 	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 	n.mu.Unlock()
@@ -245,7 +257,11 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 		}
 		for len(file.flushingBuffers) > 0 {
 			time.Sleep(10 * time.Millisecond)
-			log.Debugf("waiting for filehandle to flush %d", fileHandle)
+			log.Debugf("waiting for filehandle to flush %d buffers=%d", fileHandle, len(file.flushingBuffers))
+			if file.err != nil {
+				log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+				return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			}
 		}
 		if file.err != nil {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
@@ -256,6 +272,8 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 }
 
 func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	n.Sync(fileHandle, volumeID)
 
 	n.mu.Lock()
@@ -281,6 +299,8 @@ func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 }
 
 func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	n.SyncFile(fileName, volumeID)
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -305,6 +325,8 @@ func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
 }
 
 func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	n.mu.Lock()
 	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
 
@@ -347,26 +369,27 @@ func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 var notFound = ttlcache.ErrNotFound
 
 func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volumeID int64) ([]*Finger, error) {
-	log.Debug("in checking hashes")
-	defer log.Debug("done checking hashes")
+	log.Debug("in")
+	defer log.Debug("out")
 	chreq := &spb.CheckHashesRequest{PvolumeID: volumeID}
 	hes := make([][]byte, 0)
 	hm := make(map[string][]int)
 	for i := 0; i < len(fingers); i++ {
 		sEnc := b64.StdEncoding.EncodeToString(fingers[i].hash)
-		if val, err := n.ddcache.Get(getFileGuid(sEnc, volumeID)); err != notFound {
-			fingers[i].archive = val.(int64)
-			fingers[i].dedup = true
-		} else {
-
-			val, ok := hm[sEnc]
-			if !ok {
-				val = make([]int, 0)
-			}
-			val = append(val, i)
-			hm[sEnc] = val
-			hes = append(hes, fingers[i].hash)
+		/*
+			if val, err := n.ddcache.Get(getFileGuid(sEnc, volumeID)); err != notFound {
+				fingers[i].archive = val.(int64)
+				fingers[i].dedup = true
+			} else {
+		*/
+		val, ok := hm[sEnc]
+		if !ok {
+			val = make([]int, 0)
 		}
+		val = append(val, i)
+		hm[sEnc] = val
+		hes = append(hes, fingers[i].hash)
+		//		}
 
 	}
 	chreq.Hashes = hes
@@ -393,8 +416,8 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volum
 				fingers[s].archive = fi.Locations[i]
 				if fingers[i].archive != -1 {
 					fingers[i].dedup = true
-					loc := fingers[s].archive
-					n.ddcache.Set(getFileGuid(sEnc, volumeID), loc)
+					//loc := fingers[s].archive
+					//n.ddcache.Set(getFileGuid(sEnc, volumeID), loc)
 				}
 			}
 		}
@@ -403,8 +426,8 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volum
 }
 
 func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64, volumeID int64) ([]*Finger, error) {
-	log.Debug("in write chunks")
-	defer log.Debug("done writing chunks")
+	log.Debug("in")
+	defer log.Debug("out")
 	ces := make([]*spb.ChunkEntry, 0)
 	hl := make([]int, 0)
 	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: volumeID}
@@ -459,8 +482,8 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 }
 
 func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Finger, fileHandle, fileLocation int64, length int32, volumeID int64) error {
-	log.Debug("in write sparse chunks")
-	defer log.Debug("done writing sparse chunks")
+	log.Debug("in")
+	defer log.Debug("out")
 	pairs := make(map[int32]*spb.HashLocPairP)
 	var dup int32
 	for i := 0; i < len(fingers); i++ {
@@ -528,6 +551,8 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 
 func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length int32, volumeID int64) error {
 	log.Debugf("Writing at offset %d len %d", offset, length)
+	log.Debug("in")
+	defer log.Debug("out")
 	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 	if !ok {
 		log.Errorf("filehandle not found %s", getGUID(fileHandle, volumeID))
@@ -620,28 +645,23 @@ type Finger struct {
 
 func (j *Job) Do() {
 	var err error
+	if j.wg != nil {
+		defer j.wg.Done()
+	}
+
 	for i := 1; i < 5; i++ {
 		err = runDedupe(j)
-		if err != nil {
-			j.engine.mu.Lock()
-			j.engine.ddcache.Purge()
-			j.engine.mu.Unlock()
-		} else {
-			break
-		}
 	}
 	if err != nil {
+		log.Warnf("Unable to write %v", err)
 		j.file.err = err
 	}
 }
 
 func runDedupe(j *Job) error {
-
+	log.Debug("in")
+	defer log.Debug("out")
 	ctx, cancel := context.WithCancel(context.Background())
-	if j.wg != nil {
-		defer j.wg.Done()
-	}
-
 	defer cancel()
 	j.buffer.mu.Lock()
 	defer j.buffer.mu.Unlock()
@@ -687,15 +707,15 @@ func runDedupe(j *Job) error {
 		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing sparse chunks %v", err)
-			log.Error(err)
 			return err
 		}
-		j.file.flushMu.Lock()
-		delete(j.file.flushingBuffers, j.buffer.offset)
-		j.file.flushMu.Unlock()
+
 		j.buffer.Flushing = false
 		j.buffer.Flushed = true
 	}
+	j.file.flushMu.Lock()
+	delete(j.file.flushingBuffers, j.buffer.offset)
+	j.file.flushMu.Unlock()
 	return nil
 
 }
