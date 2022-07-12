@@ -5,7 +5,6 @@ go 1.18
 require (
 	cloud.google.com/go/pubsub v1.18.0
 	github.com/Azure/azure-storage-blob-go v0.10.0
-	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/ahmetask/worker v1.3.1
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/docker/go-connections v0.4.0
@@ -16,14 +15,14 @@ require (
 	github.com/minio/minio v0.0.0-20210522175247-41e9c6572f2d
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0
-	github.com/pierrec/lz4/v4 v4.1.14
+	github.com/pierrec/lz4/v4 v4.1.15
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88
 	google.golang.org/grpc v1.40.1
 	google.golang.org/grpc/security/advancedtls v0.0.0-20220209221444-a354b1eec350
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 

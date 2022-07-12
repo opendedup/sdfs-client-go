@@ -13,7 +13,6 @@ import (
 
 	b64 "encoding/base64"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/ahmetask/worker"
 	lru "github.com/hashicorp/golang-lru"
 	rabin "github.com/opendedup/go-rabin/rabin"
@@ -366,8 +365,6 @@ func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 	return nil
 }
 
-var notFound = ttlcache.ErrNotFound
-
 func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volumeID int64) ([]*Finger, error) {
 	log.Debug("in")
 	defer log.Debug("out")
@@ -471,6 +468,7 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 			if !fingers[z].dedup {
 				fingers[z].archive = fi.InsertRecords[i].Hashloc
 				fingers[z].dedup = !fi.InsertRecords[i].Inserted
+				fingers[z].compressedLength = fi.InsertRecords[i].CompressedLength
 				if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
 					log.Warnf("Archive should not be -1")
 					return nil, fmt.Errorf("archive should not be -1")
@@ -486,6 +484,7 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 	defer log.Debug("out")
 	pairs := make(map[int32]*spb.HashLocPairP)
 	var dup int32
+	var cl int32
 	for i := 0; i < len(fingers); i++ {
 		pairs[fingers[i].start] = &spb.HashLocPairP{
 			Hash:     fingers[i].hash,
@@ -500,8 +499,9 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		if fingers[i].dedup {
 			dup += int32(fingers[i].len)
 		}
+		cl += fingers[i].compressedLength
 	}
-	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup}
+	sdc := &spb.SparseDataChunkP{Fpos: fileLocation, Len: length, Ar: pairs, Doop: dup, CompressedLength: cl}
 	var sr *spb.SparseDedupeChunkWriteRequest
 	if n.Compress {
 		out, err := proto.Marshal(sdc)
@@ -635,12 +635,13 @@ func (n *DedupeEngine) Shutdown() {
 }
 
 type Finger struct {
-	hash    []byte
-	data    []byte
-	start   int32
-	len     int
-	dedup   bool
-	archive int64
+	hash             []byte
+	data             []byte
+	start            int32
+	len              int
+	dedup            bool
+	archive          int64
+	compressedLength int32
 }
 
 func (j *Job) Do() {
