@@ -264,7 +264,7 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 		}
 		if file.err != nil {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			return file.err
 		}
 	}
 	return nil
@@ -330,7 +330,10 @@ func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
 
 	n.mu.Unlock()
-
+	if file.err != nil {
+		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+		return file.err
+	}
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
@@ -359,7 +362,7 @@ func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 		}
 		if file.err != nil {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			return file.err
 		}
 	}
 	return nil
@@ -560,7 +563,7 @@ func (n *DedupeEngine) Write(fileHandle, offset int64, wbuffer []byte, length in
 	}
 	if file.err != nil {
 		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
-		return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+		return file.err
 	}
 	var bytesWritten int32
 	for bytesWritten < length {
@@ -646,6 +649,9 @@ type Finger struct {
 
 func (j *Job) Do() {
 	var err error
+	if j.file.err != nil {
+		return
+	}
 	if j.wg != nil {
 		defer j.wg.Done()
 	}
@@ -666,6 +672,9 @@ func runDedupe(j *Job) error {
 	defer cancel()
 	j.buffer.mu.Lock()
 	defer j.buffer.mu.Unlock()
+	if j.file.err != nil {
+		return j.file.err
+	}
 	if !j.buffer.Flushed && j.buffer.Flushing {
 		var fingers []*Finger
 		log.Debugf("bytes = [%d] [%d] [%d]", len(j.buffer.buffer), j.buffer.offset, j.buffer.limit)
