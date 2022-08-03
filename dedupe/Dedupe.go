@@ -233,6 +233,10 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
 	n.mu.Unlock()
 
+	if file.err != nil {
+		log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+		return file.err
+	}
 	if ok {
 		file.mu.Lock()
 		defer file.mu.Unlock()
