@@ -17,9 +17,10 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	cleanstore := flagSet.Bool("cleanup", false, "Returns Volume Info")
 	shutdown := flagSet.Bool("shutdown", false, "Shuts down the volume")
 	password := flagSet.String("password", "A Password", "Sets The Password for this volume")
-	scv := flagSet.Bool("sync-with-cloud", false, "Syncs the Volume with the metadata stored"+
-		" in the cloud to make sure both sides are consistent.")
+	scv := flagSet.Bool("sync-with-cloud", false, "Syncs the Cloud with the metadata stored"+
+		" on the local system to make the cloud is the same as the local system.")
 	vcv := flagSet.Int64("sync-from-cloud", 0, "Syncs the Volume with an existing cloud volume")
+
 	bsize := flagSet.String("dse-cache", ".", "Sets the local cache size for the Dedupe Storage Engine")
 	lsize := flagSet.String("volume-size", ".", "Sets the local cache size for the Dedupe Storage Engine")
 	rspeed := flagSet.String("read-speed", "-1", "Sets the max read speed from storage for blocks in KB/s")
@@ -30,6 +31,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	vvreload := flagSet.Bool("proxy-volumes-reload", false, "Reloads Proxied Volumes")
 	dinfo := flagSet.Bool("dse", false, "Returns Dedupe Storage Info")
 	sinfo := flagSet.Bool("system", false, "System Info")
+	overwrite := flagSet.Bool("overwrite", false, "Overwrite local data")
 	gcsecd := flagSet.Bool("gc-schedule", false, "Returns The Garbage Collection Schedule")
 	ccv := flagSet.Bool("connected-volumes", false, "Returns A list of volumes that are using the same storage")
 	levents := flagSet.Bool("events-list", false, "List Events")
@@ -127,7 +129,7 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		fmt.Printf("Write Speed Set to : %s \n", utils.FormatSize(int64(size)))
 	}
 	if utils.IsFlagPassed("sync-from-cloud", flagSet) {
-		evt, err := connection.SyncFromCloudVolume(ctx, *vcv, true)
+		evt, err := connection.SyncFromCloudVolume(ctx, *vcv, true, *overwrite)
 		if err != nil {
 			fmt.Printf("Unable to sync cloud volume from %d error: %v\n", *vcv, err)
 			os.Exit(1)

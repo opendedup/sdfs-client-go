@@ -665,7 +665,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	//fmt.Print("BLA")
 
 	if err != nil {
-		log.Errorf("did not connect to %s : %v\n", path, err)
+		log.Debugf("did not connect to %s : %v\n", path, err)
 		return nil, fmt.Errorf("unable to initialize sdfsClient")
 	}
 	if conn == nil {
@@ -1483,6 +1483,23 @@ func (n *SdfsConnection) SetUserMetaData(ctx context.Context, path string, fileA
 }
 
 //GetCloudFile hydrates a given file from object storage to the local filesystem. The source does not have to be in the path
+func (n *SdfsConnection) ReconcileCloudMetadata(ctx context.Context, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
+	fi, err := n.vc.ReconcileCloudMetadata(ctx, &spb.ReconcileCloudMetadataRequest{PvolumeID: n.Volumeid})
+	if err != nil {
+		log.Error("error in reconcile %v", err)
+		return nil, err
+	} else if fi.GetErrorCode() > 0 {
+		log.Error("error in reconcile %s ec:%d", fi.GetError(), fi.ErrorCode)
+		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	eventid := fi.EventID
+	if waitForCompletion {
+		return n.WaitForEvent(ctx, eventid)
+	}
+	return n.GetEvent(ctx, eventid)
+}
+
+//GetCloudFile hydrates a given file from object storage to the local filesystem. The source does not have to be in the path
 func (n *SdfsConnection) GetCloudFile(ctx context.Context, path, dst string, overwrite, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
 	fi, err := n.fc.GetCloudFile(ctx, &spb.GetCloudFileRequest{PvolumeID: n.Volumeid, File: n.GetAbsPath(path), Dstfile: n.GetAbsPath(dst), Overwrite: overwrite, Changeid: uuid.New().String()})
 	if err != nil {
@@ -1684,8 +1701,8 @@ func (n *SdfsConnection) SetWriteSpeed(ctx context.Context, speed int32) (err er
 }
 
 //SyncFromCloudVolume syncs the current volume from a give volume id
-func (n *SdfsConnection) SyncFromCloudVolume(ctx context.Context, volumeid int64, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.vc.SyncFromCloudVolume(ctx, &spb.SyncFromVolRequest{PvolumeID: n.Volumeid, Volumeid: volumeid})
+func (n *SdfsConnection) SyncFromCloudVolume(ctx context.Context, volumeid int64, waitForCompletion, overwrite bool) (event *spb.SDFSEvent, err error) {
+	fi, err := n.vc.SyncFromCloudVolume(ctx, &spb.SyncFromVolRequest{PvolumeID: n.Volumeid, Volumeid: volumeid, Overwrite: overwrite})
 	if err != nil {
 		log.Print(err)
 		return nil, err

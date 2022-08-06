@@ -39,6 +39,7 @@ type VolumeServiceClient interface {
 	SyncFromCloudVolume(ctx context.Context, in *SyncFromVolRequest, opts ...grpc.CallOption) (*SyncFromVolResponse, error)
 	SyncCloudVolume(ctx context.Context, in *SyncVolRequest, opts ...grpc.CallOption) (*SyncVolResponse, error)
 	SetMaxAge(ctx context.Context, in *SetMaxAgeRequest, opts ...grpc.CallOption) (*SetMaxAgeResponse, error)
+	ReconcileCloudMetadata(ctx context.Context, in *ReconcileCloudMetadataRequest, opts ...grpc.CallOption) (*ReconcileCloudMetadataResponse, error)
 }
 
 type volumeServiceClient struct {
@@ -202,6 +203,15 @@ func (c *volumeServiceClient) SetMaxAge(ctx context.Context, in *SetMaxAgeReques
 	return out, nil
 }
 
+func (c *volumeServiceClient) ReconcileCloudMetadata(ctx context.Context, in *ReconcileCloudMetadataRequest, opts ...grpc.CallOption) (*ReconcileCloudMetadataResponse, error) {
+	out := new(ReconcileCloudMetadataResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.VolumeService/ReconcileCloudMetadata", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VolumeServiceServer is the server API for VolumeService service.
 // All implementations must embed UnimplementedVolumeServiceServer
 // for forward compatibility
@@ -223,6 +233,7 @@ type VolumeServiceServer interface {
 	SyncFromCloudVolume(context.Context, *SyncFromVolRequest) (*SyncFromVolResponse, error)
 	SyncCloudVolume(context.Context, *SyncVolRequest) (*SyncVolResponse, error)
 	SetMaxAge(context.Context, *SetMaxAgeRequest) (*SetMaxAgeResponse, error)
+	ReconcileCloudMetadata(context.Context, *ReconcileCloudMetadataRequest) (*ReconcileCloudMetadataResponse, error)
 	mustEmbedUnimplementedVolumeServiceServer()
 }
 
@@ -280,6 +291,9 @@ func (UnimplementedVolumeServiceServer) SyncCloudVolume(context.Context, *SyncVo
 }
 func (UnimplementedVolumeServiceServer) SetMaxAge(context.Context, *SetMaxAgeRequest) (*SetMaxAgeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetMaxAge not implemented")
+}
+func (UnimplementedVolumeServiceServer) ReconcileCloudMetadata(context.Context, *ReconcileCloudMetadataRequest) (*ReconcileCloudMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReconcileCloudMetadata not implemented")
 }
 func (UnimplementedVolumeServiceServer) mustEmbedUnimplementedVolumeServiceServer() {}
 
@@ -600,6 +614,24 @@ func _VolumeService_SetMaxAge_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VolumeService_ReconcileCloudMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileCloudMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VolumeServiceServer).ReconcileCloudMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.VolumeService/ReconcileCloudMetadata",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VolumeServiceServer).ReconcileCloudMetadata(ctx, req.(*ReconcileCloudMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VolumeService_ServiceDesc is the grpc.ServiceDesc for VolumeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -674,6 +706,10 @@ var VolumeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetMaxAge",
 			Handler:    _VolumeService_SetMaxAge_Handler,
+		},
+		{
+			MethodName: "ReconcileCloudMetadata",
+			Handler:    _VolumeService_ReconcileCloudMetadata_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

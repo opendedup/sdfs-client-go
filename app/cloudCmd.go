@@ -33,7 +33,7 @@ func CloudCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	}
 
 	if utils.IsFlagPassed("download-volume", flagSet) {
-		evt, err := connection.SyncFromCloudVolume(ctx, *vcv, *overwrite)
+		evt, err := connection.SyncFromCloudVolume(ctx, *vcv, true, *overwrite)
 		if err != nil {
 			fmt.Printf("Unable to sync cloud volume from %d error: %v\n", *vcv, err)
 			os.Exit(1)
