@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -553,7 +552,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	var interceptor *SdfsInterceptor
 	defer cancel()
-	maxMsgSize := 2097152 * 40
+	maxMsgSize := 240 * 1024 * 1024 //240 MB
 	if useSSL {
 		config := &tls.Config{}
 		var tCreds credentials.TransportCredentials
@@ -708,7 +707,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 2, runtime.NumCPU(), Debug, compress, volumeid, cacheSize, cacheDuration)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 2, 4, Debug, compress, volumeid, cacheSize, cacheDuration)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
