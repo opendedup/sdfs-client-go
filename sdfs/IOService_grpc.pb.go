@@ -40,7 +40,6 @@ type FileIOServiceClient interface {
 	RmDir(ctx context.Context, in *RmDirRequest, opts ...grpc.CallOption) (*RmDirResponse, error)
 	Unlink(ctx context.Context, in *UnlinkRequest, opts ...grpc.CallOption) (*UnlinkResponse, error)
 	Write(ctx context.Context, in *DataWriteRequest, opts ...grpc.CallOption) (*DataWriteResponse, error)
-	RawWrite(ctx context.Context, in *RawDataWriteRequest, opts ...grpc.CallOption) (*DataWriteResponse, error)
 	StreamWrite(ctx context.Context, opts ...grpc.CallOption) (FileIOService_StreamWriteClient, error)
 	Read(ctx context.Context, in *DataReadRequest, opts ...grpc.CallOption) (*DataReadResponse, error)
 	Release(ctx context.Context, in *FileCloseRequest, opts ...grpc.CallOption) (*FileCloseResponse, error)
@@ -217,15 +216,6 @@ func (c *fileIOServiceClient) Unlink(ctx context.Context, in *UnlinkRequest, opt
 func (c *fileIOServiceClient) Write(ctx context.Context, in *DataWriteRequest, opts ...grpc.CallOption) (*DataWriteResponse, error) {
 	out := new(DataWriteResponse)
 	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/Write", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileIOServiceClient) RawWrite(ctx context.Context, in *RawDataWriteRequest, opts ...grpc.CallOption) (*DataWriteResponse, error) {
-	out := new(DataWriteResponse)
-	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.FileIOService/RawWrite", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +463,6 @@ type FileIOServiceServer interface {
 	RmDir(context.Context, *RmDirRequest) (*RmDirResponse, error)
 	Unlink(context.Context, *UnlinkRequest) (*UnlinkResponse, error)
 	Write(context.Context, *DataWriteRequest) (*DataWriteResponse, error)
-	RawWrite(context.Context, *RawDataWriteRequest) (*DataWriteResponse, error)
 	StreamWrite(FileIOService_StreamWriteServer) error
 	Read(context.Context, *DataReadRequest) (*DataReadResponse, error)
 	Release(context.Context, *FileCloseRequest) (*FileCloseResponse, error)
@@ -550,9 +539,6 @@ func (UnimplementedFileIOServiceServer) Unlink(context.Context, *UnlinkRequest) 
 }
 func (UnimplementedFileIOServiceServer) Write(context.Context, *DataWriteRequest) (*DataWriteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
-}
-func (UnimplementedFileIOServiceServer) RawWrite(context.Context, *RawDataWriteRequest) (*DataWriteResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RawWrite not implemented")
 }
 func (UnimplementedFileIOServiceServer) StreamWrite(FileIOService_StreamWriteServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamWrite not implemented")
@@ -926,24 +912,6 @@ func _FileIOService_Write_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(FileIOServiceServer).Write(ctx, req.(*DataWriteRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileIOService_RawWrite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RawDataWriteRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileIOServiceServer).RawWrite(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/org.opendedup.grpc.FileIOService/RawWrite",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileIOServiceServer).RawWrite(ctx, req.(*RawDataWriteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1375,10 +1343,6 @@ var FileIOService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Write",
 			Handler:    _FileIOService_Write_Handler,
-		},
-		{
-			MethodName: "RawWrite",
-			Handler:    _FileIOService_RawWrite_Handler,
 		},
 		{
 			MethodName: "Read",

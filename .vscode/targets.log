@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Mon Aug 22 19:10:01 2022
+# Make data base, printed on Tue Aug 23 17:15:07 2022
 
 # Variables
 
@@ -151,11 +151,11 @@ _ = /home/samsilverberg/.vscode-server/bin/6d9b74a70ca9c7733b29f0456fd8195364076
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := 377c99ed3db439d33544d58abafb932dfc0c42f5
+HASH := 7fb6f3786da2e028e5795a7155582305926a232c
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-b7031489-276b-42e2-9619-853ed1496e4e.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-1ed361e7-cd77-49be-bf31-3cbb7c74714d.sock
 # environment
 M2_HOME = /opt/maven
 # environment
@@ -281,13 +281,13 @@ build:
 #  Last modified 2022-07-07 15:46:35.200943047
 #  File has been updated.
 #  Successfully updated.
+ 
 #  recipe to execute (from 'Makefile', line 41):
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
 	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli app/*
 	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/gentool gentool/*
 	@mv utils/utils_linux.go .
- 
 	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli.exe app/*
 	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/gentool.exe gentool/*
 	@mv utils_linux.go utils/
@@ -327,6 +327,6 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Mon Aug 22 19:10:01 2022
+# Finished Make data base on Tue Aug 23 17:15:07 2022
 
  
