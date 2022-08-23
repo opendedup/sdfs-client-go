@@ -13,9 +13,11 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	uuid "github.com/google/uuid"
 	"github.com/kelseyhightower/envconfig"
@@ -707,7 +709,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 2, 4, Debug, compress, volumeid, cacheSize, cacheDuration)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 8, 2, Debug, compress, volumeid, cacheSize, cacheDuration)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
@@ -1326,6 +1328,56 @@ func (n *SdfsConnection) Write(ctx context.Context, fh int64, data []byte, offse
 	}
 }
 
+func (n *SdfsConnection) RawWrite(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
+
+	if n.DedupeEnabled {
+		return n.Dedupe.Write(fh, offset, data, length, n.Volumeid)
+	} else {
+		var fi *spb.DataWriteResponse
+		byteBuffer := Buffer{Endian: "big"}
+		byteBuffer.PutLong(fh)
+		if n.Compress && len(data) > 10 {
+
+			comp, err := dedupe.CompressData(data)
+			if err != nil {
+				log.Error(err)
+				return err
+			}
+			if len(comp) > len(data) {
+				byteBuffer.PutByte(0)
+				byteBuffer.PutInt(length)
+				byteBuffer.PutLong(offset)
+				byteBuffer.PutLong(n.Volumeid)
+				byteBuffer.Put(data)
+
+			} else {
+				byteBuffer.PutByte(1)
+				byteBuffer.PutInt(length)
+				byteBuffer.PutLong(offset)
+				byteBuffer.PutLong(n.Volumeid)
+				byteBuffer.Put(comp)
+			}
+
+		} else {
+			byteBuffer.PutByte(0)
+			byteBuffer.PutInt(length)
+			byteBuffer.PutLong(offset)
+			byteBuffer.PutLong(n.Volumeid)
+			byteBuffer.Put(data)
+		}
+
+		fi, err = n.fc.RawWrite(ctx, &spb.RawDataWriteRequest{Data: byteBuffer.Array()})
+		if err != nil {
+			log.Print(err)
+			return err
+		} else if fi.GetErrorCode() > 0 {
+			return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+		}
+
+		return nil
+	}
+}
+
 func (n *SdfsConnection) StreamWrite(ctx context.Context, fh int64, data []byte, offset int64, length int32) (err error) {
 
 	if n.DedupeEnabled {
@@ -1827,6 +1879,101 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 	return fi.GetSize(), nil
 }
 
+func (n *SdfsConnection) RawUpload(ctx context.Context, src, dst string, blockSize int) (written int64, err error) {
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return -1, err
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		log.Errorf("error stating %s", src)
+		return -1, err
+	}
+	if info.IsDir() {
+		return -1, fmt.Errorf(" %s is a dir", src)
+	}
+	tmpname := path.Join(sdfsTempFolder, u.String())
+	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: sdfsTempFolder, Mode: 511})
+	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: tmpname, Mode: 511})
+	if err != nil {
+		log.Errorf("error in mknod %d %s", n.Volumeid, tmpname)
+		return -1, err
+	} else if mkf.GetErrorCode() > 0 {
+		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
+	}
+	fh, err := n.Open(ctx, tmpname, -1)
+	if err != nil {
+		log.Errorf("error in open %d %s", n.Volumeid, tmpname)
+		return -1, err
+	}
+	defer n.Unlink(ctx, tmpname)
+	b1 := make([]byte, blockSize*1024)
+	var offset int64 = 0
+	var n1 int = 0
+	r, err := os.Open(src)
+	if err != nil {
+		log.Errorf("error in os open %s", src)
+		return -1, err
+	}
+	defer r.Close()
+
+	n1, err = r.Read(b1)
+	s := make([]byte, n1)
+	copy(s, b1)
+	err = n.RawWrite(ctx, fh, s, offset, int32(n1))
+	offset += int64(n1)
+	if err != nil {
+		log.Errorf("error in first write %d %s", n.Volumeid, tmpname)
+		n.Release(ctx, fh)
+		return -1, err
+	}
+	for n1 > 0 {
+		n1, err = r.Read(b1)
+		if n1 > 0 {
+			s = make([]byte, n1)
+			copy(s, b1)
+			err = n.RawWrite(ctx, fh, s, offset, int32(n1))
+			offset += int64(n1)
+			if err != nil {
+				log.Errorf("error in write %d %s", n.Volumeid, tmpname)
+				n.Release(ctx, fh)
+				return -1, err
+			}
+		}
+	}
+	//log.Infof("fn = %s", n.GetAbsPath(tmpname))
+	_, err = n.Stat(ctx, n.GetAbsPath(tmpname))
+	if err != nil {
+		log.Errorf("error in stat temp file %d %s %v", n.Volumeid, dst, err)
+		return -1, err
+	}
+	n.Release(ctx, fh)
+	dir := path.Dir(n.GetAbsPath(dst))
+	if dir != "" {
+		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: dir})
+		if err != nil {
+			log.Errorf("error in mkdir %d %s", n.Volumeid, dir)
+			return -1, err
+		} else if mkd.GetErrorCode() > 0 && mkd.GetErrorCode() != spb.ErrorCodes_EEXIST {
+			log.Errorf("error in mkdir %d %s", n.Volumeid, dir)
+			return -1, &SdfsError{Err: mkd.GetError(), ErrorCode: mkd.GetErrorCode()}
+		}
+	}
+	n.Unlink(ctx, dst)
+	err = n.Rename(ctx, tmpname, n.GetAbsPath(dst))
+	if err != nil {
+		log.Errorf("error in rename %d %s", n.Volumeid, dst)
+		return -1, err
+	}
+	fi, err := n.Stat(ctx, n.GetAbsPath(dst))
+	if err != nil {
+		log.Errorf("error in stat %d %s", n.Volumeid, dst)
+		return -1, err
+	}
+
+	return fi.GetSize(), nil
+}
+
 //Download downloads a file from SDFS locally
 func (n *SdfsConnection) Download(ctx context.Context, src, dst string, blockSize int) (bytesread int64, err error) {
 	if n.DedupeEnabled {
@@ -1983,4 +2130,18 @@ func (n *SdfsConnection) DeleteUser(ctx context.Context, user string) error {
 		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
 	return nil
+}
+
+func Int64ToByteArray(i int64) []byte {
+	var b []byte
+	sh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	sh.Len = 8
+	sh.Cap = 8
+	sh.Data = uintptr(unsafe.Pointer(&i))
+
+	return b[:]
+}
+
+func ByteArrayToInt(b []byte) int64 {
+	return *(*int64)(unsafe.Pointer(&b[0]))
 }
