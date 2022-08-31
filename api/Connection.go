@@ -656,7 +656,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 
 	} else {
 		log.Debugf("Connecting to %s \n", address)
-
+		maxMsgSize := 240 * 1024 * 1024 //240 MB
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
@@ -709,7 +709,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 8, 2, Debug, compress, volumeid, cacheSize, cacheDuration)
+		de, err := dedupe.NewDedupeEngine(ctx, conn, 8, 8, Debug, compress, volumeid, cacheSize, cacheDuration)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err
