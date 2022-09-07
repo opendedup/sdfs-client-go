@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Wed Aug 31 13:44:27 2022
+# Make data base, printed on Wed Sep  7 00:46:54 2022
 
 # Variables
 
@@ -119,7 +119,7 @@ MOTD_SHOWN = pam
 # automatic
 ^F = $(notdir $^)
 # environment
-SSH_CLIENT = 97.120.198.122 35242 22
+SSH_CLIENT = 97.120.164.194 38980 22
 # environment
 RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
 # automatic
@@ -153,11 +153,11 @@ _ = /home/samsilverberg/.vscode-server/bin/e4503b30fc78200f846c62cf8091b76ff5547
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := 3b71bed808a5302069a345c0dda4f47b050342d7
+HASH := fe4da092a21cec46745de0862f660a3d24a12eba
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-ac8db915-8a10-447f-9b4d-fdb75bb730ec.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-05df790f-8660-49d2-badc-b25c301431a4.sock
 # environment
 M2_HOME = /opt/maven
 # environment
@@ -173,7 +173,7 @@ HOME = /home/samsilverberg
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-XDG_SESSION_ID = 861
+XDG_SESSION_ID = 1031
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -191,7 +191,7 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.198.122 35242 10.128.0.36 22
+SSH_CONNECTION = 97.120.164.194 38980 10.128.0.36 22
 # variable set hash-table stats:
 # Load=91/1024=9%, Rehash=0, Collisions=2/148=1%
 
@@ -280,10 +280,10 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-24 15:53:01.405180574
+#  Last modified 2022-09-02 20:35:36.654432917
+ 
 #  File has been updated.
 #  Successfully updated.
- 
 #  recipe to execute (from 'Makefile', line 41):
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
@@ -329,6 +329,6 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Wed Aug 31 13:44:27 2022
+# Finished Make data base on Wed Sep  7 00:46:54 2022
 
  
