@@ -53,6 +53,7 @@ type SdfsConnection struct {
 	evt              spb.SDFSEventServiceClient
 	us               spb.SdfsUserServiceClient
 	ec               spb.EncryptionServiceClient
+	sc               spb.StorageServiceClient
 	Dedupe           *dedupe.DedupeEngine
 	DedupeEnabled    bool
 	SdfsInterceptor  *SdfsInterceptor
@@ -686,6 +687,8 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	uc := spb.NewSdfsUserServiceClient(conn)
 	pc := spb.NewPortRedirectorServiceClient(conn)
 	ec := spb.NewEncryptionServiceClient(conn)
+
+	nsc := spb.NewStorageServiceClient(conn)
 	if volumeid == -1 {
 		vi, err := vc.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{PvolumeID: volumeid})
 		if err != nil {
@@ -706,6 +709,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		Path:            zpath,
 		Volumeid:        volumeid,
 		Compress:        compress,
+		sc:              nsc,
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
@@ -1093,6 +1097,70 @@ func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *sp
 
 		}
 	}
+}
+
+func (n *SdfsConnection) ReplicateRemoteFile(ctx context.Context, src, dst, url string, volumeid int64, mtls bool, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
+	fi, err := n.sc.ReplicateRemoteFile(ctx, &spb.FileReplicationRequest{SrcFilePath: src,
+		DstFilePath: dst,
+		RvolumeID:   volumeid,
+		PvolumeID:   n.Volumeid,
+		Url:         url,
+		Mtls:        mtls})
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	} else if fi.GetErrorCode() > 0 {
+		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	eventid := fi.EventID
+	if waitForCompletion {
+		return n.WaitForEvent(ctx, eventid)
+	}
+	return n.GetEvent(ctx, eventid)
+}
+
+func (n *SdfsConnection) CancelReplication(ctx context.Context, uuid string) error {
+	fi, err := n.sc.CancelReplication(ctx, &spb.CancelReplicationRequest{EventID: uuid, PvolumeID: n.Volumeid})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) PauseReplication(ctx context.Context, uuid string, pause bool) error {
+	fi, err := n.sc.PauseReplication(ctx, &spb.PauseReplicationRequest{EventID: uuid, PvolumeID: n.Volumeid, Pause: pause})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) AddReplicationSrc(ctx context.Context, url string, volumeid int64, mtls bool) error {
+	fi, err := n.sc.AddReplicaSource(ctx, &spb.AddReplicaSourceRequest{PvolumeID: n.Volumeid, RvolumeID: volumeid, Url: url, Mtls: mtls})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
+}
+
+func (n *SdfsConnection) RemoveReplicationSrc(ctx context.Context, url string, volumeid int64) error {
+	fi, err := n.sc.RemoveReplicaSource(ctx, &spb.RemoveReplicaSourceRequest{PvolumeID: n.Volumeid, RvolumeID: volumeid, Url: url})
+	if err != nil {
+		log.Print(err)
+		return err
+	} else if fi.GetErrorCode() > 0 {
+		return &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return nil
 }
 
 func (n *SdfsConnection) SetMaxAge(ctx context.Context, maxAge int64) error {

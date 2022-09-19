@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Wed Sep  7 00:46:54 2022
+# Make data base, printed on Sun Sep 18 23:43:03 2022
 
 # Variables
 
@@ -60,8 +60,6 @@ MAKEFLAGS = pqrR
 CURDIR := /home/samsilverberg/git/sdfs-client-go
 # environment
 UTM_SOURCE = vscode
-# environment
-APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = 1
 # automatic
 *D = $(patsubst %/,%,$(dir $*))
 # makefile (from 'Makefile', line 7)
@@ -111,7 +109,7 @@ MAKELEVEL := 0
 # default
 MAKE = $(MAKE_COMMAND)
 # environment
-PATH = /home/samsilverberg/.vscode-server/bin/e4503b30fc78200f846c62cf8091b76ff5547662/bin/remote-cli:/home/samsilverberg/anaconda3/bin:/home/samsilverberg/anaconda3/condabin:/opt/maven/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games:/usr/local/go/bin:/snap/bin:/home/samsilverberg/go/bin
+PATH = /home/samsilverberg/.vscode-server/bin/784b0177c56c607789f9638da7b6bf3230d47a8c/bin/remote-cli:/home/samsilverberg/anaconda3/bin:/home/samsilverberg/anaconda3/condabin:/opt/maven/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games:/usr/local/go/bin:/snap/bin:/home/samsilverberg/go/bin
 # default
 MAKEFILES := 
 # environment
@@ -119,7 +117,7 @@ MOTD_SHOWN = pam
 # automatic
 ^F = $(notdir $^)
 # environment
-SSH_CLIENT = 97.120.164.194 38980 22
+SSH_CLIENT = 97.120.182.124 32814 22
 # environment
 RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
 # automatic
@@ -131,7 +129,7 @@ LS_COLORS =
 # 'override' directive
 GNUMAKEFLAGS := 
 # environment
-BROWSER = /home/samsilverberg/.vscode-server/bin/e4503b30fc78200f846c62cf8091b76ff5547662/bin/helpers/browser.sh
+BROWSER = /home/samsilverberg/.vscode-server/bin/784b0177c56c607789f9638da7b6bf3230d47a8c/bin/helpers/browser.sh
 # environment
 CONDA_DEFAULT_ENV = base
 # environment
@@ -149,15 +147,15 @@ GOARCH := amd64
 # environment
 VSCODE_AGENT_FOLDER = /home/samsilverberg/.vscode-server
 # environment
-_ = /home/samsilverberg/.vscode-server/bin/e4503b30fc78200f846c62cf8091b76ff5547662/node
+_ = /home/samsilverberg/.vscode-server/bin/784b0177c56c607789f9638da7b6bf3230d47a8c/node
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := fe4da092a21cec46745de0862f660a3d24a12eba
+HASH := 3909e3e38f2a6a6ae3419dad3983ad326a741ebe
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-05df790f-8660-49d2-badc-b25c301431a4.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-691e4509-ff4d-49ac-a9ba-4b21abc66cda.sock
 # environment
 M2_HOME = /opt/maven
 # environment
@@ -173,7 +171,7 @@ HOME = /home/samsilverberg
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-XDG_SESSION_ID = 1031
+XDG_SESSION_ID = 1474
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -191,9 +189,9 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.164.194 38980 10.128.0.36 22
+SSH_CONNECTION = 97.120.182.124 32814 10.128.0.36 22
 # variable set hash-table stats:
-# Load=91/1024=9%, Rehash=0, Collisions=2/148=1%
+# Load=90/1024=9%, Rehash=0, Collisions=2/147=1%
 
 # Pattern-specific Variable Values
 
@@ -280,8 +278,8 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
-#  Last modified 2022-09-02 20:35:36.654432917
  
+#  Last modified 2022-09-12 05:36:22.753179581
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 41):
@@ -329,6 +327,6 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Wed Sep  7 00:46:54 2022
+# Finished Make data base on Sun Sep 18 23:43:03 2022
 
  
