@@ -1,13 +1,12 @@
 make --dry-run --always-make --keep-going --print-directory
 make: Entering directory '/home/samsilverberg/git/sdfs-client-go'
- 
 mkdir -p /home/samsilverberg/git/sdfs-client-go/build
 echo "Building sdfscli binary to '/home/samsilverberg/git/sdfs-client-go/build/sdfscli'"
-go build -ldflags="-X 'main.Version=master' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/sdfscli app/*
-go build -ldflags="-X 'main.Version=master' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/gentool gentool/*
+go build -ldflags="-X 'main.Version=dp3replication' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/sdfscli app/*
+go build -ldflags="-X 'main.Version=dp3replication' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/gentool gentool/*
 mv utils/utils_linux.go .
-env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=master' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/sdfscli.exe app/*
-env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=master' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/gentool.exe gentool/*
+env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=dp3replication' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/sdfscli.exe app/*
+env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=dp3replication' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/gentool.exe gentool/*
 mv utils_linux.go utils/
 make: Leaving directory '/home/samsilverberg/git/sdfs-client-go'
  

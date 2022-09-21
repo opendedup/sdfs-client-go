@@ -654,11 +654,12 @@ type Finger struct {
 
 func (j *Job) Do() {
 	var err error
-	if j.file.err != nil {
-		return
-	}
 	if j.wg != nil {
 		defer j.wg.Done()
+	}
+
+	if j.file.err != nil {
+		return
 	}
 
 	for i := 1; i < 5; i++ {
