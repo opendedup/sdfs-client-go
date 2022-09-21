@@ -258,12 +258,18 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 			}
 			wg.Wait()
 		}
+		var cntdown int
 		for len(file.flushingBuffers) > 0 {
 			time.Sleep(10 * time.Millisecond)
 			log.Debugf("waiting for filehandle to flush %d buffers=%d", fileHandle, len(file.flushingBuffers))
 			if file.err != nil {
 				log.Errorf("error during Previous Write IO Operation detected %v", file.err)
 				return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+			}
+			cntdown++
+			if cntdown == 18000 {
+				log.Info("enter timeout")
+				return fmt.Errorf("Sync timedout after 3 minutes")
 			}
 		}
 		if file.err != nil {
@@ -277,8 +283,7 @@ func (n *DedupeEngine) Sync(fileHandle int64, volumeID int64) error {
 func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	n.Sync(fileHandle, volumeID)
-
+	syncerr := n.Sync(fileHandle, volumeID)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
@@ -296,6 +301,10 @@ func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 			log.Errorf("error during Previous Write IO Operation detected %v", file.err)
 			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
 		}
+	}
+	if syncerr != nil {
+		log.Errorf("error during Previous Write IO Operation detected %v", syncerr)
+		return fmt.Errorf("error during Previous Write IO Operation detected %v", syncerr)
 	}
 
 	return nil
@@ -360,9 +369,20 @@ func (n *DedupeEngine) SyncFile(fileName string, volumeID int64) error {
 				}
 			}
 			wg.Wait()
+
+			var cntdown int
+
 			for len(file.flushingBuffers) > 0 {
 				time.Sleep(10 * time.Millisecond)
 				log.Debugf("waiting for filehandle to flush %s", fileName)
+				if file.err != nil {
+					log.Errorf("error during Previous Write IO Operation detected %v", file.err)
+					return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
+				}
+				cntdown++
+				if cntdown == 18000 {
+					return fmt.Errorf("SyncFile timedout after 3 minutes")
+				}
 			}
 		}
 		if file.err != nil {
@@ -654,15 +674,18 @@ type Finger struct {
 
 func (j *Job) Do() {
 	var err error
-	if j.file.err != nil {
-		return
-	}
 	if j.wg != nil {
 		defer j.wg.Done()
+	}
+	if j.file.err != nil {
+		return
 	}
 
 	for i := 1; i < 5; i++ {
 		err = runDedupe(j)
+		if err == nil {
+			break
+		}
 	}
 	if err != nil {
 		log.Warnf("Unable to write %v", err)
@@ -711,17 +734,20 @@ func runDedupe(j *Job) error {
 		fingers, err := j.engine.CheckHashes(ctx, fingers, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while checking hashes %v", err)
+			delete(j.file.flushingBuffers, j.buffer.offset)
 			return err
 		}
 
 		fingers, err = j.engine.WriteChunks(ctx, fingers, j.buffer.fileHandle, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing chunks %v", err)
+			delete(j.file.flushingBuffers, j.buffer.offset)
 			return err
 		}
 		err = j.engine.WriteSparseDataChunk(ctx, fingers, j.buffer.fileHandle, j.buffer.offset, j.buffer.limit, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while writing sparse chunks %v", err)
+			delete(j.file.flushingBuffers, j.buffer.offset)
 			return err
 		}
 
