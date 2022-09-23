@@ -33,8 +33,34 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	value := flagSet.String("value", "value", "The Attribute Value")
 	bs := flagSet.Int("blocksize", 1024, "The blocksize in kb for uploads and downloads")
 	fio := flagSet.String("io", ".", "Returns File Dedupe Rates and other IO Attributes")
+	rpl := flagSet.Bool("replicate", false, "Replicate File")
+	url := flagSet.String("replication-url", "", "Replication URL")
+	volumeid := flagSet.Int64("replication-volume", 0, "Replication Source Volume id")
+	mtls := flagSet.Bool("replication-mtls", false, "Use MTLS for replication")
 	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
+	if *rpl {
+		if !utils.IsFlagPassed("src", flagSet) || !utils.IsFlagPassed("dst", flagSet) {
+			fmt.Println("--src and dst must be set for rename")
+			os.Exit(1)
+		}
+		if !utils.IsFlagPassed("replication-url", flagSet) || !utils.IsFlagPassed("replication-volume", flagSet) {
+			fmt.Println("--replication-volume and replication-url must be set")
+			os.Exit(1)
+		}
+		evt, err := connection.ReplicateRemoteFile(ctx, *src, *dst, *url, *volumeid, *mtls, true)
+		if err != nil {
+			fmt.Printf("Unable to replicate: %s error: %v\n", *mkdir, err)
+			os.Exit(1)
+		}
+		if evt.Level != "info" {
+			fmt.Printf("Unable to replicate: %s to %s/%s on %d   error: %s\n", *src, *url, *dst, *volumeid, evt.ShortMsg)
+			os.Exit(1)
+		}
+
+		fmt.Printf("replicated %s to %s/%s on %d  \n", *src, *url, *dst, *volumeid)
+		return
+	}
 	if utils.IsFlagPassed("mkdir", flagSet) {
 		err := connection.MkDirAll(ctx, *mkdir)
 		if err != nil {

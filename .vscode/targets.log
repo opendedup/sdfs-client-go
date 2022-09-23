@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Tue Sep 20 15:10:51 2022
+# Make data base, printed on Fri Sep 23 00:07:55 2022
 
 # Variables
 
@@ -117,7 +117,7 @@ MOTD_SHOWN = pam
 # automatic
 ^F = $(notdir $^)
 # environment
-SSH_CLIENT = 97.120.182.124 47946 22
+SSH_CLIENT = 97.120.130.121 49228 22
 # environment
 RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
 # automatic
@@ -151,11 +151,11 @@ _ = /home/samsilverberg/.vscode-server/bin/784b0177c56c607789f9638da7b6bf3230d47
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := e7417fd6a58ff4934b7a4fa086ebd557f611b82e
+HASH := 72439e1a2f5d9659d83b148fea65e16acdf8a2ec
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-c735cf9c-e179-4824-8d94-5deadc1f5d10.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-b04b5023-7bfa-4454-afef-7981f81d4ee4.sock
 # environment
 M2_HOME = /opt/maven
 # environment
@@ -171,7 +171,7 @@ HOME = /home/samsilverberg
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-XDG_SESSION_ID = 1542
+XDG_SESSION_ID = 1579
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -189,7 +189,7 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.182.124 47946 10.128.0.36 22
+SSH_CONNECTION = 97.120.130.121 49228 10.128.0.36 22
 # variable set hash-table stats:
 # Load=90/1024=9%, Rehash=0, Collisions=2/147=1%
 
@@ -278,13 +278,13 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
- 
 #  Last modified 2022-09-12 05:36:22.753179581
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 41):
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
+ 
 	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli app/*
 	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/gentool gentool/*
 	@mv utils/utils_linux.go .
@@ -327,6 +327,6 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Tue Sep 20 15:10:51 2022
+# Finished Make data base on Fri Sep 23 00:07:55 2022
 
  
