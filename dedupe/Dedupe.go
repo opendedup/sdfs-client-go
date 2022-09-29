@@ -304,7 +304,7 @@ func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	n.SyncFile(fileName, volumeID)
+	syncfileerr := n.SyncFile(fileName, volumeID)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
@@ -321,6 +321,10 @@ func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
 			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
 		}
 
+	}
+	if syncfileerr != nil {
+		log.Errorf("error during Previous Write IO Operation detected %v", syncfileerr)
+		return fmt.Errorf("error during Previous Write IO Operation detected %v", syncfileerr)
 	}
 
 	return nil
