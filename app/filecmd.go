@@ -50,7 +50,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 		}
 		evt, err := connection.ReplicateRemoteFile(ctx, *src, *dst, *url, *volumeid, *mtls, true)
 		if err != nil {
-			fmt.Printf("Unable to replicate: %s error: %v\n", *mkdir, err)
+			fmt.Printf("Unable to replicate: %s error: %v\n", *src, err)
 			os.Exit(1)
 		}
 		if evt.Level != "info" {

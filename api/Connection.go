@@ -1100,19 +1100,21 @@ func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *sp
 }
 
 func (n *SdfsConnection) ReplicateRemoteFile(ctx context.Context, src, dst, url string, volumeid int64, mtls bool, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
-	fi, err := n.sc.ReplicateRemoteFile(ctx, &spb.FileReplicationRequest{SrcFilePath: src,
-		DstFilePath: dst,
-		RvolumeID:   volumeid,
-		PvolumeID:   n.Volumeid,
-		Url:         url,
-		Mtls:        mtls})
+	fi, err := n.sc.ReplicateRemoteFile(ctx, &spb.FileReplicationRequest{
+		FileLocation: []*spb.FileReplicationRequest_ReplicationFileLocation{
+			{SrcFilePath: src, DstFilePath: dst},
+		},
+		RvolumeID: volumeid,
+		PvolumeID: n.Volumeid,
+		Url:       url,
+		Mtls:      mtls})
 	if err != nil {
 		log.Print(err)
 		return nil, err
 	} else if fi.GetErrorCode() > 0 {
 		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
 	}
-	eventid := fi.EventID
+	eventid := fi.EventID[0]
 	if waitForCompletion {
 		return n.WaitForEvent(ctx, eventid)
 	}

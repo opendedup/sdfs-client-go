@@ -35,8 +35,42 @@ func ConfigCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	gcsecd := flagSet.Bool("gc-schedule", false, "Returns The Garbage Collection Schedule")
 	ccv := flagSet.Bool("connected-volumes", false, "Returns A list of volumes that are using the same storage")
 	levents := flagSet.Bool("events-list", false, "List Events")
+	radd := flagSet.Bool("replication-add", false, "Add a Replication Source")
+	rrm := flagSet.Bool("replication-remove", false, "Remove a Replication Source")
+	url := flagSet.String("replication-url", "", "Replication URL")
+	volumeid := flagSet.Int64("replication-volume", 0, "Replication Source Volume id")
+	mtls := flagSet.Bool("replication-mtls", false, "Use MTLS for replication")
 	connection := utils.ParseAndConnect(flagSet)
 	defer connection.CloseConnection(ctx)
+	if *radd {
+		if !utils.IsFlagPassed("replication-url", flagSet) || !utils.IsFlagPassed("replication-volume", flagSet) {
+			fmt.Println("--replication-volume and replication-url must be set")
+			os.Exit(1)
+		}
+		err := connection.AddReplicationSrc(ctx, *url, *volumeid, *mtls)
+		if err != nil {
+			fmt.Printf("Unable to add replicate: %s error: %v\n", *url, err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("replicated source added for  %s on %d  \n", *url, *volumeid)
+		return
+	}
+
+	if *rrm {
+		if !utils.IsFlagPassed("replication-url", flagSet) || !utils.IsFlagPassed("replication-volume", flagSet) {
+			fmt.Println("--replication-volume and replication-url must be set")
+			os.Exit(1)
+		}
+		err := connection.RemoveReplicationSrc(ctx, *url, *volumeid)
+		if err != nil {
+			fmt.Printf("Unable to remove replicate: %s error: %v\n", *url, err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("replicated source removed for  %s on %d  \n", *url, *volumeid)
+		return
+	}
 
 	if *cleanstore {
 
