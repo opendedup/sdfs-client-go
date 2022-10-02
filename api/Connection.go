@@ -1308,7 +1308,11 @@ func (n *SdfsConnection) GetAttr(ctx context.Context, path string) (stat *spb.St
 //Flush flushes the requested file to underlying storage
 func (n *SdfsConnection) Flush(ctx context.Context, path string, fh int64) (err error) {
 	if n.DedupeEnabled {
-		n.Dedupe.Sync(fh, n.Volumeid)
+		syncerr := n.Dedupe.Sync(fh, n.Volumeid)
+		if syncerr != nil {
+			log.Printf("unable to Sync : %v\n", syncerr)
+			return syncerr
+		}
 	}
 	fi, err := n.fc.Flush(ctx, &spb.FlushRequest{PvolumeID: n.Volumeid, Path: n.GetAbsPath(path), Fd: fh})
 	if err != nil {
