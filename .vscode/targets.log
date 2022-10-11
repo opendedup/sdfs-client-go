@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Sun Oct  2 15:17:26 2022
+# Make data base, printed on Tue Oct 11 03:13:20 2022
 
 # Variables
 
@@ -17,7 +17,7 @@ JAVA_HOME = /usr/lib/jvm/java-17-openjdk-amd64
 # environment
 LC_ALL = C
 # environment
-UUID = d9e015ed-e179-43fa-bb5c-800dda772ae2
+UUID = f4de25d1-cf98-4b39-8eb4-f9702031290e
 # makefile (from 'Makefile', line 5)
 GOOS := linux
 # environment
@@ -42,8 +42,6 @@ PWD := /home/samsilverberg/git/sdfs-client-go
 %D = $(patsubst %/,%,$(dir $%))
 # environment
 XDG_DATA_DIRS = /usr/local/share:/usr/share:/var/lib/snapd/desktop
-# environment
-OLDPWD = /home/samsilverberg/.vscode-server/bin/74b1f979648cc44d385a2286793c226e611f59e7
 # automatic
 ^D = $(patsubst %/,%,$(dir $^))
 # automatic
@@ -62,8 +60,6 @@ MAKEFLAGS = pqrR
 CURDIR := /home/samsilverberg/git/sdfs-client-go
 # environment
 UTM_SOURCE = vscode
-# environment
-APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = 1
 # automatic
 *D = $(patsubst %/,%,$(dir $*))
 # makefile (from 'Makefile', line 7)
@@ -121,7 +117,7 @@ MOTD_SHOWN = pam
 # automatic
 ^F = $(notdir $^)
 # environment
-SSH_CLIENT = 97.120.179.132 43330 22
+SSH_CLIENT = 97.120.179.132 42926 22
 # environment
 RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
 # automatic
@@ -155,17 +151,17 @@ _ = /home/samsilverberg/.vscode-server/bin/74b1f979648cc44d385a2286793c226e611f5
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := 763b3f7ec961b7624aa7f08a24856235f33e91c2
+HASH := f8973d9667960c930b7f80c9d5492174b535362e
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-e42717c9-bfc9-469a-abda-14f9dfdfa077.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-3ad256c2-15e2-49f1-bc5f-c31e46cba3d9.sock
 # environment
 M2_HOME = /opt/maven
 # environment
 GOMODCACHE = /home/samsilverberg/go/pkg/mod
 # environment
-GOLANG_EXECUTABLE = /usr/local/bin/go
+GOLANG_EXECUTABLE = go
 # environment
 XDG_SESSION_CLASS = user
 # environment
@@ -175,7 +171,7 @@ HOME = /home/samsilverberg
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-XDG_SESSION_ID = 1903
+XDG_SESSION_ID = 2085
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -193,9 +189,9 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.179.132 43330 10.128.0.36 22
+SSH_CONNECTION = 97.120.179.132 42926 10.128.0.36 22
 # variable set hash-table stats:
-# Load=92/1024=9%, Rehash=0, Collisions=2/149=1%
+# Load=90/1024=9%, Rehash=0, Collisions=2/147=1%
 
 # Pattern-specific Variable Values
 
@@ -203,9 +199,9 @@ SSH_CONNECTION = 97.120.179.132 43330 10.128.0.36 22
 
 # Directories
 
-# . (device 2049, inode 659096): 21 files, no impossibilities.
+# . (device 2049, inode 659096): 22 files, no impossibilities.
 
-# 21 files, no impossibilities in 1 directories.
+# 22 files, no impossibilities in 1 directories.
 
 # Implicit Rules
 
@@ -282,10 +278,10 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
- 
 #  Last modified 2022-09-29 16:48:47.879048229
 #  File has been updated.
 #  Successfully updated.
+ 
 #  recipe to execute (from 'Makefile', line 41):
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfscli binary to '$(PWD)/build/sdfscli'"
@@ -325,12 +321,12 @@ crosscompile:
 
 # No general ('VPATH' variable) search path.
 
-# strcache buffers: 1 (0) / strings = 34 / storage = 269 B / avg = 7 B
-# current buf: size = 8162 B / used = 269 B / count = 34 / avg = 7 B
+# strcache buffers: 1 (0) / strings = 35 / storage = 306 B / avg = 8 B
+# current buf: size = 8162 B / used = 306 B / count = 35 / avg = 8 B
 
-# strcache performance: lookups = 55 / hit rate = 38%
+# strcache performance: lookups = 56 / hit rate = 37%
 # hash-table stats:
-# Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Sun Oct  2 15:17:26 2022
+# Load=35/8192=0%, Rehash=0, Collisions=0/56=0%
+# Finished Make data base on Tue Oct 11 03:13:20 2022
 
  

@@ -1033,6 +1033,17 @@ func (n *SdfsConnection) GetEvent(ctx context.Context, eventid string) (*spb.SDF
 	return fi.Event, nil
 }
 
+func (n *SdfsConnection) GetEvents(ctx context.Context, eventids []string) ([]*spb.SDFSEvent, error) {
+	fi, err := n.evt.GetEvents(ctx, &spb.SDFSEventsRequest{Uuid: eventids, PvolumeID: n.Volumeid})
+	if err != nil {
+		log.Errorf("unable to get , error: %v \n", err)
+		return nil, err
+	} else if fi.GetErrorCode() > 0 {
+		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	return fi.Events, nil
+}
+
 //ListEvents lists all the events that have occured
 func (n *SdfsConnection) ListEvents(ctx context.Context) ([]*spb.SDFSEvent, error) {
 	fi, err := n.evt.ListEvents(ctx, &spb.SDFSEventListRequest{PvolumeID: n.Volumeid})

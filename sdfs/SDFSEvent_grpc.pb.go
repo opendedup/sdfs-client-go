@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SDFSEventServiceClient interface {
 	GetEvent(ctx context.Context, in *SDFSEventRequest, opts ...grpc.CallOption) (*SDFSEventResponse, error)
+	GetEvents(ctx context.Context, in *SDFSEventsRequest, opts ...grpc.CallOption) (*SDFSEventsResponse, error)
 	ListEvents(ctx context.Context, in *SDFSEventListRequest, opts ...grpc.CallOption) (*SDFSEventListResponse, error)
 	SubscribeEvent(ctx context.Context, in *SDFSEventRequest, opts ...grpc.CallOption) (SDFSEventService_SubscribeEventClient, error)
 }
@@ -38,6 +39,15 @@ func NewSDFSEventServiceClient(cc grpc.ClientConnInterface) SDFSEventServiceClie
 func (c *sDFSEventServiceClient) GetEvent(ctx context.Context, in *SDFSEventRequest, opts ...grpc.CallOption) (*SDFSEventResponse, error) {
 	out := new(SDFSEventResponse)
 	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.SDFSEventService/GetEvent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sDFSEventServiceClient) GetEvents(ctx context.Context, in *SDFSEventsRequest, opts ...grpc.CallOption) (*SDFSEventsResponse, error) {
+	out := new(SDFSEventsResponse)
+	err := c.cc.Invoke(ctx, "/org.opendedup.grpc.SDFSEventService/GetEvents", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +100,7 @@ func (x *sDFSEventServiceSubscribeEventClient) Recv() (*SDFSEventResponse, error
 // for forward compatibility
 type SDFSEventServiceServer interface {
 	GetEvent(context.Context, *SDFSEventRequest) (*SDFSEventResponse, error)
+	GetEvents(context.Context, *SDFSEventsRequest) (*SDFSEventsResponse, error)
 	ListEvents(context.Context, *SDFSEventListRequest) (*SDFSEventListResponse, error)
 	SubscribeEvent(*SDFSEventRequest, SDFSEventService_SubscribeEventServer) error
 	mustEmbedUnimplementedSDFSEventServiceServer()
@@ -101,6 +112,9 @@ type UnimplementedSDFSEventServiceServer struct {
 
 func (UnimplementedSDFSEventServiceServer) GetEvent(context.Context, *SDFSEventRequest) (*SDFSEventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetEvent not implemented")
+}
+func (UnimplementedSDFSEventServiceServer) GetEvents(context.Context, *SDFSEventsRequest) (*SDFSEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEvents not implemented")
 }
 func (UnimplementedSDFSEventServiceServer) ListEvents(context.Context, *SDFSEventListRequest) (*SDFSEventListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListEvents not implemented")
@@ -135,6 +149,24 @@ func _SDFSEventService_GetEvent_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SDFSEventServiceServer).GetEvent(ctx, req.(*SDFSEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SDFSEventService_GetEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SDFSEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SDFSEventServiceServer).GetEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/org.opendedup.grpc.SDFSEventService/GetEvents",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SDFSEventServiceServer).GetEvents(ctx, req.(*SDFSEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -188,6 +220,10 @@ var SDFSEventService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEvent",
 			Handler:    _SDFSEventService_GetEvent_Handler,
+		},
+		{
+			MethodName: "GetEvents",
+			Handler:    _SDFSEventService_GetEvents_Handler,
 		},
 		{
 			MethodName: "ListEvents",
