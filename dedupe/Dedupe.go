@@ -44,6 +44,7 @@ type DedupeEngine struct {
 	hc          spb.StorageServiceClient
 	rabinTable  *rabin.Table
 	pool        *worker.Pool
+	hashpool    *worker.Pool
 	mu          sync.Mutex
 	bufferSize  int
 	Compress    bool
@@ -78,6 +79,12 @@ type Job struct {
 	engine *DedupeEngine
 	file   *DedupeFile
 	wg     *sync.WaitGroup
+}
+
+type HashJob struct {
+	wg     *sync.WaitGroup
+	job    *Job
+	finger *Finger
 }
 
 //SdfsError is an SDFS Error with an error code mapped as a syscall error id
@@ -132,9 +139,10 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		log.SetLevel(logrus.DebugLevel)
 	}
 	pool := worker.NewWorkerPool(threads, 1)
-
+	hashpool := worker.NewWorkerPool(42, 40)
 	//Start worker pool
 	pool.Start()
+	hashpool.Start()
 	hc := spb.NewStorageServiceClient(connection)
 	fi, err := hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: volumeid})
 	if err != nil {
@@ -162,6 +170,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 		maxLen:      fi.MaxSegmentSize,
 		rabinTable:  rabin.NewTable(uint64(fi.PolyNumber), int(fi.WindowSize)),
 		pool:        pool,
+		hashpool:    hashpool,
 		pVolumeID:   volumeid,
 		bufferSize:  size,
 		Compress:    compressed,
@@ -284,6 +293,7 @@ func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 	log.Debug("in")
 	defer log.Debug("out")
 	syncerr := n.Sync(fileHandle, volumeID)
+
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	file, ok := n.fileHandles[getGUID(fileHandle, volumeID)]
@@ -302,6 +312,7 @@ func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
 		}
 	}
+
 	if syncerr != nil {
 		log.Errorf("error during Previous Write IO Operation detected %v", syncerr)
 		return fmt.Errorf("error during Previous Write IO Operation detected %v", syncerr)
@@ -313,7 +324,7 @@ func (n *DedupeEngine) Close(fileHandle int64, volumeID int64) error {
 func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	n.SyncFile(fileName, volumeID)
+	syncfileerr := n.SyncFile(fileName, volumeID)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	file, ok := n.openFiles[getFileGuid(fileName, volumeID)]
@@ -330,6 +341,10 @@ func (n *DedupeEngine) CloseFile(fileName string, volumeID int64) error {
 			return fmt.Errorf("error during Previous Write IO Operation detected %v", file.err)
 		}
 
+	}
+	if syncfileerr != nil {
+		log.Errorf("error during Previous Write IO Operation detected %v", syncfileerr)
+		return fmt.Errorf("error during Previous Write IO Operation detected %v", syncfileerr)
 	}
 
 	return nil
@@ -672,11 +687,24 @@ type Finger struct {
 	compressedLength int32
 }
 
+func (hj *HashJob) Do() {
+	defer hj.wg.Done()
+	if hj.job.engine.hashType == MD5 {
+		hash16 := md5.Sum(hj.finger.data)
+		hj.finger.hash = hash16[:]
+	} else {
+		hash32 := sha256.Sum256(hj.finger.data)
+		hj.finger.hash = hash32[:]
+	}
+
+}
+
 func (j *Job) Do() {
 	var err error
 	if j.wg != nil {
 		defer j.wg.Done()
 	}
+
 	if j.file.err != nil {
 		return
 	}
@@ -720,17 +748,16 @@ func runDedupe(j *Job) error {
 			}
 			er := nextPos + int32(clen)
 			finger := &Finger{data: j.buffer.buffer[nextPos:er], start: nextPos, len: clen}
-			if j.engine.hashType == MD5 {
-				hash16 := md5.Sum(finger.data)
-				finger.hash = hash16[:]
-			} else {
-				hash32 := sha256.Sum256(finger.data)
-				finger.hash = hash32[:]
-			}
 			//log.Debugf("hash is %s length is %d", hex.EncodeToString(finger.hash), clen)
 			fingers = append(fingers, finger)
 			nextPos += int32(clen)
 		}
+		var wg sync.WaitGroup
+		for _, finger := range fingers {
+			wg.Add(1)
+			j.engine.hashpool.Submit(&HashJob{finger: finger, job: j, wg: &wg})
+		}
+		wg.Wait()
 		fingers, err := j.engine.CheckHashes(ctx, fingers, j.file.pVolumeID)
 		if err != nil {
 			log.Errorf("error while checking hashes %v", err)
