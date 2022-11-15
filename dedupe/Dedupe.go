@@ -19,8 +19,9 @@ import (
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"github.com/pierrec/lz4/v4"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+
+	pool "github.com/processout/grpc-go-pool"
 )
 
 type HashType int
@@ -36,12 +37,10 @@ const (
 type DedupeEngine struct {
 	openFiles   map[string]*DedupeFile
 	fileHandles map[string]*DedupeFile
-	connection  *grpc.ClientConn
 	chunkSize   int64
 	hashType    HashType
 	minLen      int64
 	maxLen      int64
-	hc          spb.StorageServiceClient
 	rabinTable  *rabin.Table
 	pool        *worker.Pool
 	hashpool    *worker.Pool
@@ -50,6 +49,7 @@ type DedupeEngine struct {
 	Compress    bool
 	//ddcache     *ttlcache.Cache
 	pVolumeID int64
+	cp        *pool.Pool
 }
 
 type DedupeBuffer struct {
@@ -131,7 +131,7 @@ func getFileGuid(file string, volumeID int64) string {
 	return fmt.Sprintf("%s-%d", file, volumeID)
 }
 
-func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, threads int, debug bool, compressed bool, volumeid int64, cacheSize int, cacheDuration int) (*DedupeEngine, error) {
+func NewDedupeEngine(ctx context.Context, p *pool.Pool, size, threads int, debug bool, compressed bool, volumeid int64, cacheSize int, cacheDuration int) (*DedupeEngine, error) {
 	log.SetReportCaller(true)
 	log.SetOutput(os.Stdout)
 
@@ -143,7 +143,13 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 	//Start worker pool
 	pool.Start()
 	hashpool.Start()
-	hc := spb.NewStorageServiceClient(connection)
+	client, err := p.Get(ctx)
+	defer client.Close()
+	if err != nil {
+		log.Errorf("unable to get client from pool %v", err)
+		return nil, err
+	}
+	hc := spb.NewStorageServiceClient(client)
 	fi, err := hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: volumeid})
 	if err != nil {
 		log.Errorf("unable to get hashinginfo %v", err)
@@ -162,8 +168,7 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 	dd := &DedupeEngine{
 		openFiles:   make(map[string]*DedupeFile),
 		fileHandles: make(map[string]*DedupeFile),
-		hc:          hc,
-		connection:  connection,
+		cp:          p,
 		chunkSize:   fi.ChunkSize,
 		hashType:    hashType,
 		minLen:      fi.MinSegmentSize,
@@ -185,7 +190,14 @@ func NewDedupeEngine(ctx context.Context, connection *grpc.ClientConn, size, thr
 func (n *DedupeEngine) HashingInfo(ctx context.Context) (*spb.HashingInfoResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
-	fi, err := n.hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID})
+	client, err := n.cp.Get(ctx)
+	defer client.Close()
+	if err != nil {
+		log.Errorf("unable to get client from pool %v", err)
+		return nil, err
+	}
+	hc := spb.NewStorageServiceClient(client)
+	fi, err := hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: n.pVolumeID})
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -434,7 +446,14 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volum
 	}
 	chreq.Hashes = hes
 	if len(hes) > 0 {
-		fi, err := n.hc.CheckHashes(ctx, chreq)
+		client, err := n.cp.Get(ctx)
+		defer client.Close()
+		if err != nil {
+			log.Errorf("unable to get client from pool %v", err)
+			return nil, err
+		}
+		hc := spb.NewStorageServiceClient(client)
+		fi, err := hc.CheckHashes(ctx, chreq)
 		if err != nil {
 			log.Errorf("error cheching hashes %v", err)
 			return nil, err
@@ -498,7 +517,14 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 	}
 	if len(ces) > 0 {
 		wchreq.Chunks = ces
-		fi, err := n.hc.WriteChunks(ctx, wchreq)
+		client, err := n.cp.Get(ctx)
+		defer client.Close()
+		if err != nil {
+			log.Errorf("unable to get client from pool %v", err)
+			return nil, err
+		}
+		hc := spb.NewStorageServiceClient(client)
+		fi, err := hc.WriteChunks(ctx, wchreq)
 		if err != nil {
 			log.Errorf("error during writechunk api call %v", err)
 			return nil, err
@@ -579,7 +605,14 @@ func (n *DedupeEngine) WriteSparseDataChunk(ctx context.Context, fingers []*Fing
 		sr = &spb.SparseDedupeChunkWriteRequest{Chunk: sdc, FileHandle: fileHandle, FileLocation: fileLocation, PvolumeID: volumeID}
 	}
 	log.Debugf("writing sdc %d at position %d", len(pairs), sr.FileLocation)
-	fi, err := n.hc.WriteSparseDataChunk(ctx, sr)
+	client, err := n.cp.Get(ctx)
+	defer client.Close()
+	if err != nil {
+		log.Errorf("unable to get client from pool %v", err)
+		return err
+	}
+	hc := spb.NewStorageServiceClient(client)
+	fi, err := hc.WriteSparseDataChunk(ctx, sr)
 	if err != nil {
 		log.Errorf("error while writing chunk %v", err)
 		return err
