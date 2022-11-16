@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Tue Nov 15 14:32:10 2022
+# Make data base, printed on Tue Nov 15 17:48:48 2022
 
 # Variables
 
@@ -117,7 +117,7 @@ MOTD_SHOWN = pam
 # automatic
 ^F = $(notdir $^)
 # environment
-SSH_CLIENT = 97.120.179.132 51772 22
+SSH_CLIENT = 97.120.179.132 60018 22
 # environment
 RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
 # automatic
@@ -153,11 +153,11 @@ _ = /home/samsilverberg/.vscode-server/bin/6261075646f055b99068d3688932416f2346d
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := ec5c3939c1cee4bf3733aaee4c42822c88209d37
+HASH := 85b4c2143fe32addefc40cec44f3f7dc229a49a1
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-16c690e8-841e-41ae-947b-09cd85bf54cf.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-29b8f9e7-e8ff-418e-ae2c-dc824306edc4.sock
 # environment
 M2_HOME = /opt/maven
 # environment
@@ -175,7 +175,7 @@ ELECTRON_RUN_AS_NODE = 1
 # environment
 GSETTINGS_SCHEMA_DIR = /home/samsilverberg/anaconda3/share/glib-2.0/schemas
 # environment
-XDG_SESSION_ID = 3245
+XDG_SESSION_ID = 1
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -193,7 +193,7 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.179.132 51772 10.128.0.36 22
+SSH_CONNECTION = 97.120.179.132 60018 10.128.0.36 22
 # variable set hash-table stats:
 # Load=92/1024=9%, Rehash=0, Collisions=2/149=1%
 
@@ -282,7 +282,6 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
- 
 #  Last modified 2022-11-04 21:10:58.774758706
 #  File has been updated.
 #  Successfully updated.
@@ -295,6 +294,7 @@ build:
 	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfscli.exe app/*
 	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/gentool.exe gentool/*
 	@mv utils_linux.go utils/
+ 
 
 verifiers: getdeps fmt lint
 #  Implicit rule search has not been done.
@@ -331,6 +331,6 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Tue Nov 15 14:32:10 2022
+# Finished Make data base on Tue Nov 15 17:48:48 2022
 
  
