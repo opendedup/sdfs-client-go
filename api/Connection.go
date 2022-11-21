@@ -35,12 +35,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const (
-	sdfsBackend    = "sdfs"
-	sdfsSeparator  = "/"
-	sdfsTempFolder = ".sdfsclitemp"
-)
-
 var Verbose bool
 var Debug bool
 
@@ -1110,10 +1104,10 @@ func (n *SdfsConnection) FileNotification(ctx context.Context, fileInfo chan *sp
 	}
 }
 
-func (n *SdfsConnection) ReplicateRemoteFile(ctx context.Context, src, dst, url string, volumeid int64, mtls bool, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
+func (n *SdfsConnection) ReplicateRemoteFile(ctx context.Context, src, dst, url string, volumeid int64, mtls bool, srcoffset, srcsize, dstoffset int64, overwrite, waitForCompletion bool) (event *spb.SDFSEvent, err error) {
 	fi, err := n.sc.ReplicateRemoteFile(ctx, &spb.FileReplicationRequest{
 		FileLocation: []*spb.FileReplicationRequest_ReplicationFileLocation{
-			{SrcFilePath: src, DstFilePath: dst},
+			{SrcFilePath: src, DstFilePath: dst, Srcoffset: srcoffset, Srcsize: srcsize, Dstoffset: dstoffset, Overwrite: overwrite},
 		},
 		RvolumeID: volumeid,
 		PvolumeID: n.Volumeid,
@@ -1820,10 +1814,6 @@ func (n *SdfsConnection) SyncCloudVolume(ctx context.Context, waitForCompletion 
 
 //Upload uploads a file to the filesystem
 func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize int) (written int64, err error) {
-	u, err := uuid.NewRandom()
-	if err != nil {
-		return -1, err
-	}
 	info, err := os.Stat(src)
 	if err != nil {
 		log.Errorf("error stating %s", src)
@@ -1832,21 +1822,30 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 	if info.IsDir() {
 		return -1, fmt.Errorf(" %s is a dir", src)
 	}
-	tmpname := path.Join(sdfsTempFolder, u.String())
-	n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: sdfsTempFolder, Mode: 511})
-	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: tmpname, Mode: 511})
+	dir := path.Dir(n.GetAbsPath(dst))
+	if dir != "" {
+		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: dir})
+		if err != nil {
+			log.Errorf("error in mkdir %d %s", n.Volumeid, dir)
+			return -1, err
+		} else if mkd.GetErrorCode() > 0 && mkd.GetErrorCode() != spb.ErrorCodes_EEXIST {
+			log.Errorf("error in mkdir %d %s", n.Volumeid, dir)
+			return -1, &SdfsError{Err: mkd.GetError(), ErrorCode: mkd.GetErrorCode()}
+		}
+	}
+	n.Unlink(ctx, dst)
+	mkf, err := n.fc.Mknod(ctx, &spb.MkNodRequest{PvolumeID: n.Volumeid, Path: dst, Mode: 511})
 	if err != nil {
-		log.Errorf("error in mknod %d %s", n.Volumeid, tmpname)
+		log.Errorf("error in mknod %d %s", n.Volumeid, dst)
 		return -1, err
 	} else if mkf.GetErrorCode() > 0 {
 		return -1, &SdfsError{Err: mkf.GetError(), ErrorCode: mkf.GetErrorCode()}
 	}
-	fh, err := n.Open(ctx, tmpname, -1)
+	fh, err := n.Open(ctx, dst, -1)
 	if err != nil {
-		log.Errorf("error in open %d %s", n.Volumeid, tmpname)
+		log.Errorf("error in open %d %s", n.Volumeid, dst)
 		return -1, err
 	}
-	defer n.Unlink(ctx, tmpname)
 	b1 := make([]byte, blockSize*1024)
 	var offset int64 = 0
 	var n1 int = 0
@@ -1863,7 +1862,7 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 	err = n.Write(ctx, fh, s, offset, int32(n1))
 	offset += int64(n1)
 	if err != nil {
-		log.Errorf("error in first write %d %s", n.Volumeid, tmpname)
+		log.Errorf("error in first write %d %s", n.Volumeid, dst)
 		n.Release(ctx, fh)
 		return -1, err
 	}
@@ -1875,42 +1874,24 @@ func (n *SdfsConnection) Upload(ctx context.Context, src, dst string, blockSize 
 			err = n.Write(ctx, fh, s, offset, int32(n1))
 			offset += int64(n1)
 			if err != nil {
-				log.Errorf("error in write %d %s", n.Volumeid, tmpname)
+				log.Errorf("error in write %d %s", n.Volumeid, dst)
 				n.Release(ctx, fh)
 				return -1, err
 			}
 		}
 	}
 	//log.Infof("fn = %s", n.GetAbsPath(tmpname))
-	_, err = n.Stat(ctx, n.GetAbsPath(tmpname))
+	_, err = n.Stat(ctx, n.GetAbsPath(dst))
 	if err != nil {
 		log.Errorf("error in stat temp file %d %s %v", n.Volumeid, dst, err)
 		return -1, err
 	}
 	n.Release(ctx, fh)
-	dir := path.Dir(n.GetAbsPath(dst))
-	if dir != "" {
-		mkd, err := n.fc.MkDirAll(ctx, &spb.MkDirRequest{PvolumeID: n.Volumeid, Path: dir})
-		if err != nil {
-			log.Errorf("error in mkdir %d %s", n.Volumeid, dir)
-			return -1, err
-		} else if mkd.GetErrorCode() > 0 && mkd.GetErrorCode() != spb.ErrorCodes_EEXIST {
-			log.Errorf("error in mkdir %d %s", n.Volumeid, dir)
-			return -1, &SdfsError{Err: mkd.GetError(), ErrorCode: mkd.GetErrorCode()}
-		}
-	}
-	n.Unlink(ctx, dst)
-	err = n.Rename(ctx, tmpname, n.GetAbsPath(dst))
-	if err != nil {
-		log.Errorf("error in rename %d %s", n.Volumeid, dst)
-		return -1, err
-	}
 	fi, err := n.Stat(ctx, n.GetAbsPath(dst))
 	if err != nil {
 		log.Errorf("error in stat %d %s", n.Volumeid, dst)
 		return -1, err
 	}
-
 	return fi.GetSize(), nil
 }
 

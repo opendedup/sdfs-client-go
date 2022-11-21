@@ -35,6 +35,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 	fio := flagSet.String("io", ".", "Returns File Dedupe Rates and other IO Attributes")
 	rpl := flagSet.Bool("replicate", false, "Replicate File")
 	url := flagSet.String("replication-url", "", "Replication URL")
+	overwrite := flagSet.Bool("overwrite", false, "Overwrite file on destintination if it exists")
 	volumeid := flagSet.Int64("replication-volume", 0, "Replication Source Volume id")
 	mtls := flagSet.Bool("replication-mtls", false, "Use MTLS for replication")
 	connection := utils.ParseAndConnect(flagSet)
@@ -48,7 +49,7 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			fmt.Println("--replication-volume and replication-url must be set")
 			os.Exit(1)
 		}
-		evt, err := connection.ReplicateRemoteFile(ctx, *src, *dst, *url, *volumeid, *mtls, true)
+		evt, err := connection.ReplicateRemoteFile(ctx, *src, *dst, *url, *volumeid, *mtls, 0, 0, 0, *overwrite, true)
 		if err != nil {
 			fmt.Printf("Unable to replicate: %s error: %v\n", *src, err)
 			os.Exit(1)
