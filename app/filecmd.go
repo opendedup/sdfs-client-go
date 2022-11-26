@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -122,6 +123,11 @@ func FileCmd(ctx context.Context, flagSet *flag.FlagSet) {
 			os.Exit(1)
 		}
 		if utils.IsFlagPassed("preserve", flagSet) {
+			if runtime.GOOS == "windows" {
+				fmt.Printf("Preserving permissions in windows is not supported")
+				os.Exit(1)
+			}
+
 			UID, GID, CHMOD, err := utils.GetPermissions(*src)
 			if err != nil {
 				fmt.Printf("Unable to get permissions: %s error: %v\n", *src, err)
