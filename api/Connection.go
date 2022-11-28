@@ -648,20 +648,29 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
 		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
+		//wsz := int32(240 * 1024 * 1024)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
-			grpc.WithTransportCredentials(tCreds))
+			grpc.WithTransportCredentials(tCreds),
+			//grpc.WithInitialConnWindowSize(wsz),
+			//grpc.WithInitialWindowSize(wsz),
+		)
+
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
 		}
 		p, err = pool.New(func() (*grpc.ClientConn, error) {
+			wsz := int32(240 * 1024 * 1024)
 			return grpc.DialContext(context.Background(), address, grpc.WithBlock(),
 				grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 				grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 				grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
+				grpc.WithInitialConnWindowSize(wsz),
+				grpc.WithInitialWindowSize(wsz),
+
 				grpc.WithTransportCredentials(tCreds))
 		}, 1, 20, 0)
 		if err != nil {
@@ -672,10 +681,13 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	} else {
 		log.Debugf("Connecting to %s \n", address)
 		maxMsgSize := 240 * 1024 * 1024 //240 MB
+		wsz := int32(240 * 1024 * 1024)
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
+			grpc.WithInitialConnWindowSize(wsz),
+			grpc.WithInitialWindowSize(wsz),
 			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
@@ -685,6 +697,8 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 			return grpc.DialContext(context.Background(), address, grpc.WithInsecure(), grpc.WithBlock(),
 				grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 				grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
+				grpc.WithInitialConnWindowSize(wsz),
+				grpc.WithInitialWindowSize(wsz),
 				grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
 		}, 1, 20, 0)
 		if err != nil {
