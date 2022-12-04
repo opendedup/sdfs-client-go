@@ -737,7 +737,7 @@ func TestCloudSync(t *testing.T) {
 	fn, sh, _ := makeGenericFile(ctx, t, saddr, "", 1024)
 	fi, err := saddr.Stat(ctx, fn)
 	assert.Nil(t, err)
-	_, err = daddr.SyncFromCloudVolume(ctx, info.SerialNumber, true)
+	_, err = daddr.SyncFromCloudVolume(ctx, info.SerialNumber, true, true)
 	assert.Nil(t, err)
 	nfi, err := daddr.Stat(ctx, fn)
 	assert.Nil(t, err)

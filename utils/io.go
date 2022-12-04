@@ -140,6 +140,10 @@ func WriteLocalFile(parent string, size int64, blocksize int) (*string, *[]byte,
 }
 
 func WriteSdfsFile(ctx context.Context, connection *api.SdfsConnection, parent string, size int64, blocksize int) (*string, *[]byte, error) {
+	return WriteSdfsFileOffset(ctx, connection, parent, size, int64(0), blocksize)
+}
+
+func WriteSdfsFileOffset(ctx context.Context, connection *api.SdfsConnection, parent string, size, offset int64, blocksize int) (*string, *[]byte, error) {
 	fn := fmt.Sprintf("%s/%s", parent, string(RandBytesMaskImpr(16)))
 	err := connection.MkNod(ctx, fn, 511, 0)
 	if err != nil {
@@ -154,7 +158,6 @@ func WriteSdfsFile(ctx context.Context, connection *api.SdfsConnection, parent s
 		return nil, nil, err
 	}
 	maxoffset := size
-	offset := int64(0)
 	h, err := blake2b.New(32, make([]byte, 0))
 	if err != nil {
 		return nil, nil, err
@@ -182,8 +185,11 @@ func WriteSdfsFile(ctx context.Context, connection *api.SdfsConnection, parent s
 
 	return &fn, &hash, nil
 }
-
 func ReadSdfsFile(connection *api.SdfsConnection, filenm string, delete bool) ([]byte, error) {
+	return ReadSdfsFileOffset(connection, filenm, int64(0), delete)
+}
+
+func ReadSdfsFileOffset(connection *api.SdfsConnection, filenm string, offset int64, delete bool) ([]byte, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -196,7 +202,6 @@ func ReadSdfsFile(connection *api.SdfsConnection, filenm string, delete bool) ([
 		return nil, err
 	}
 	maxoffset := stat.Size - 32
-	offset := int64(0)
 	b := make([]byte, 0)
 	h, err := blake2b.New(32, b)
 	if err != nil {

@@ -6,7 +6,9 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
+
 # Make data base, printed on Sun Nov 27 18:02:02 2022
+
 
 # Variables
 
@@ -153,6 +155,7 @@ _ = /home/samsilverberg/.vscode-server/bin/6261075646f055b99068d3688932416f2346d
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
+
 HASH := 6150a1a42882b40b3dd31af0eb0226d80b3d0db4
 # environment
 _CE_M = 
@@ -193,7 +196,7 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.179.132 58272 10.128.0.36 22
+SSH_CONNECTION = 97.120.179.132 32802 10.128.0.36 22
 # variable set hash-table stats:
 # Load=92/1024=9%, Rehash=0, Collisions=2/149=1%
 
@@ -282,9 +285,9 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
- 
 #  Last modified 2022-11-18 08:31:04.841598926
 #  File has been updated.
+ 
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 41):
 	@mkdir -p $(PWD)/build
@@ -331,6 +334,7 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
+
 # Finished Make data base on Sun Nov 27 18:02:02 2022
 
  
