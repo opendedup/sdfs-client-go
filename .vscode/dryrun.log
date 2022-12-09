@@ -1,5 +1,6 @@
 make --dry-run --always-make --keep-going --print-directory
 make: Entering directory '/home/samsilverberg/git/sdfs-client-go'
+ 
 mkdir -p /home/samsilverberg/git/sdfs-client-go/build
 echo "Building sdfscli binary to '/home/samsilverberg/git/sdfs-client-go/build/sdfscli'"
 go build -ldflags="-X 'main.Version=dp3replication' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/sdfscli app/*

@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Sat Nov 26 20:03:11 2022
+# Make data base, printed on Fri Dec  9 07:22:50 2022
 
 # Variables
 
@@ -17,7 +17,7 @@ JAVA_HOME = /usr/lib/jvm/java-17-openjdk-amd64
 # environment
 LC_ALL = C
 # environment
-UUID = f4de25d1-cf98-4b39-8eb4-f9702031290e
+UUID = d9e015ed-e179-43fa-bb5c-800dda772ae2
 # makefile (from 'Makefile', line 5)
 GOOS := linux
 # environment
@@ -60,6 +60,8 @@ MAKEFLAGS = pqrR
 CURDIR := /home/samsilverberg/git/sdfs-client-go
 # environment
 UTM_SOURCE = vscode
+# environment
+APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = 1
 # automatic
 *D = $(patsubst %/,%,$(dir $*))
 # makefile (from 'Makefile', line 7)
@@ -117,7 +119,7 @@ MOTD_SHOWN = pam
 # automatic
 ^F = $(notdir $^)
 # environment
-SSH_CLIENT = 97.120.179.132 32802 22
+SSH_CLIENT = 97.120.150.232 54120 22
 # environment
 RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
 # automatic
@@ -153,17 +155,17 @@ _ = /home/samsilverberg/.vscode-server/bin/6261075646f055b99068d3688932416f2346d
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # makefile (from 'Makefile', line 9)
-HASH := 949be8d30a2d0a03ed2d0cf021c1b592819afbee
+HASH := 72ede5256bcdd52acf0efcab3e2be3844f273a21
 # environment
 _CE_M = 
 # environment
-VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-c9790e74-d6fd-4d38-a926-ead3c42e0dd7.sock
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-197bbe24-9c7a-43f8-be96-858fd4f6a732.sock
 # environment
 M2_HOME = /opt/maven
 # environment
 GOMODCACHE = /home/samsilverberg/go/pkg/mod
 # environment
-GOLANG_EXECUTABLE = go
+GOLANG_EXECUTABLE = /usr/local/bin/go
 # environment
 XDG_SESSION_CLASS = user
 # environment
@@ -175,7 +177,7 @@ ELECTRON_RUN_AS_NODE = 1
 # environment
 GSETTINGS_SCHEMA_DIR = /home/samsilverberg/anaconda3/share/glib-2.0/schemas
 # environment
-XDG_SESSION_ID = 362
+XDG_SESSION_ID = 739
 # environment
 GOPROXY = https://proxy.golang.org,direct
 # default
@@ -193,9 +195,9 @@ CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
 # environment
 _CE_CONDA = 
 # environment
-SSH_CONNECTION = 97.120.179.132 32802 10.128.0.36 22
+SSH_CONNECTION = 97.120.150.232 54120 10.128.0.36 22
 # variable set hash-table stats:
-# Load=92/1024=9%, Rehash=0, Collisions=2/149=1%
+# Load=93/1024=9%, Rehash=0, Collisions=2/150=1%
 
 # Pattern-specific Variable Values
 
@@ -282,9 +284,9 @@ all: build
 
 build:
 #  Implicit rule search has not been done.
-#  Last modified 2022-11-18 08:31:04.841598926
-#  File has been updated.
  
+#  Last modified 2022-12-01 21:54:52.283615766
+#  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 41):
 	@mkdir -p $(PWD)/build
@@ -331,6 +333,6 @@ crosscompile:
 # strcache performance: lookups = 55 / hit rate = 38%
 # hash-table stats:
 # Load=34/8192=0%, Rehash=0, Collisions=0/55=0%
-# Finished Make data base on Sat Nov 26 20:03:11 2022
+# Finished Make data base on Fri Dec  9 07:22:50 2022
 
  
