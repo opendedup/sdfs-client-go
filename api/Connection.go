@@ -24,6 +24,7 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -56,6 +57,7 @@ type SdfsConnection struct {
 	streamingClients map[int64]spb.FileIOService_StreamWriteClient
 	configLock       sync.RWMutex
 	Compress         bool
+	Cp               *pool.Pool
 }
 
 // A Credentials Struct
@@ -550,6 +552,7 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 	var interceptor *SdfsInterceptor
 	defer cancel()
 	maxMsgSize := 240 * 1024 * 1024 //240 MB
+	var p *pool.Pool
 	if useSSL {
 		config := &tls.Config{}
 		var tCreds credentials.TransportCredentials
@@ -648,6 +651,17 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 			log.Errorf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
 		}
+		p, err = pool.New(func() (*grpc.ClientConn, error) {
+			return grpc.DialContext(context.Background(), address, grpc.WithBlock(),
+				grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
+				grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
+				grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
+				grpc.WithTransportCredentials(tCreds))
+		}, 1, 20, 0)
+		if err != nil {
+			log.Errorf("did not connect to %s : %v\n", path, err)
+			return nil, fmt.Errorf("unable to initialize sdfsClient")
+		}
 
 	} else {
 		log.Debugf("Connecting to %s \n", address)
@@ -657,6 +671,20 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
+		if err != nil {
+			log.Errorf("did not connect to %s : %v\n", path, err)
+			return nil, fmt.Errorf("unable to initialize sdfsClient")
+		}
+		p, err = pool.New(func() (*grpc.ClientConn, error) {
+			return grpc.DialContext(context.Background(), address, grpc.WithInsecure(), grpc.WithBlock(),
+				grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
+				grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
+				grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
+		}, 1, 20, 0)
+		if err != nil {
+			log.Errorf("did not connect to %s : %v\n", path, err)
+			return nil, fmt.Errorf("unable to initialize sdfsClient")
+		}
 	}
 	//fmt.Print("BLA")
 
@@ -704,10 +732,11 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		Volumeid:        volumeid,
 		Compress:        compress,
 		sc:              nsc,
+		Cp:              p,
 	}
 	if dedupeEnabled {
 		log.Debugf("Initializing Dedupe Engine\n")
-		de, err := dedupe.NewDedupeEngine(ctx, conn, 8, 8, Debug, compress, volumeid, cacheSize, cacheDuration)
+		de, err := dedupe.NewDedupeEngine(ctx, p, 8, 8, Debug, compress, volumeid, cacheSize, cacheDuration)
 		if err != nil {
 			log.Errorf("error initializing dedupe connection: %v\n", err)
 			return nil, err

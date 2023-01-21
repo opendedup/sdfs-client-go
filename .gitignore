@@ -3,5 +3,4 @@ build/
 file.txt
 keys/
 out/
-.vscode/targets.log
-.vscode/targets.log
+.vscode/*
