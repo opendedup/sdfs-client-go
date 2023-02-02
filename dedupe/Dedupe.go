@@ -486,9 +486,19 @@ func (n *DedupeEngine) CheckHashes(ctx context.Context, fingers []*Finger, volum
 func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileHandle int64, volumeID int64) ([]*Finger, error) {
 	log.Debug("in")
 	defer log.Debug("out")
-	ces := make([]*spb.ChunkEntry, 0)
 	hl := make([]int, 0)
-	wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: volumeID}
+	client, err := n.cp.Get(ctx)
+	if err != nil {
+		log.Errorf("unable to get client from pool %v", err)
+		return nil, err
+	}
+	defer client.Close()
+	hc := spb.NewStorageServiceClient(client)
+	cstream, err := hc.WriteChunksStream(ctx)
+	if err != nil {
+		log.Errorf("unable to create streamer %v", err)
+		return nil, err
+	}
 	for i := 0; i < len(fingers); i++ {
 		if !fingers[i].dedup {
 			if n.Compress && len(fingers[i].data) > 10 {
@@ -498,15 +508,34 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 				}
 				if len(buf) > len(fingers[i].data) || err != nil {
 					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
-					ces = append(ces, ce)
+					wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: volumeID, Chunks: []*spb.ChunkEntry{ce}}
+					err = cstream.Send(wchreq)
+					if err != nil {
+						log.Errorf("error during writechunk api call %v", err)
+						return nil, err
+					}
 				} else {
 					ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: buf, Compressed: true, CompressedLength: int32(len(fingers[i].data))}
-					ces = append(ces, ce)
+					wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: volumeID, Chunks: []*spb.ChunkEntry{ce}}
+					err = cstream.Send(wchreq)
+					if err != nil {
+						log.Errorf("error during writechunk api call %v", err)
+						return nil, err
+					}
 				}
 
 			} else {
 				ce := &spb.ChunkEntry{Hash: fingers[i].hash, Data: fingers[i].data, Compressed: false}
-				ces = append(ces, ce)
+				wchreq := &spb.WriteChunksRequest{FileHandle: fileHandle, PvolumeID: volumeID, Chunks: []*spb.ChunkEntry{ce}}
+				err = cstream.Send(wchreq)
+				if err != nil {
+					log.Errorf("error during writechunk api call %v", err)
+					return nil, err
+				}
+			}
+			if err != nil {
+				log.Errorf("error during writechunk api call %v", err)
+				return nil, err
 			}
 			hl = append(hl, i)
 		}
@@ -514,33 +543,24 @@ func (n *DedupeEngine) WriteChunks(ctx context.Context, fingers []*Finger, fileH
 			log.Warnf("found null data at %d arlen %d", i, len(fingers))
 		}
 	}
-	if len(ces) > 0 {
-		wchreq.Chunks = ces
-		client, err := n.cp.Get(ctx)
-		defer client.Close()
-		if err != nil {
-			log.Errorf("unable to get client from pool %v", err)
-			return nil, err
-		}
-		hc := spb.NewStorageServiceClient(client)
-		fi, err := hc.WriteChunks(ctx, wchreq)
-		if err != nil {
-			log.Errorf("error during writechunk api call %v", err)
-			return nil, err
-		} else if fi.GetErrorCode() > 0 {
-			log.Errorf("error writing chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
-			return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
-		}
-		for i := 0; i < len(fi.InsertRecords); i++ {
-			z := hl[i]
-			if !fingers[z].dedup {
-				fingers[z].archive = fi.InsertRecords[i].Hashloc
-				fingers[z].dedup = !fi.InsertRecords[i].Inserted
-				fingers[z].compressedLength = fi.InsertRecords[i].CompressedLength
-				if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
-					log.Warnf("Archive should not be -1")
-					return nil, fmt.Errorf("archive should not be -1")
-				}
+
+	fi, err := cstream.CloseAndRecv()
+	if err != nil {
+		log.Errorf("error during writechunk api call %v", err)
+		return nil, err
+	} else if fi.GetErrorCode() > 0 {
+		log.Errorf("error writing chunks error : %s , error code: %s", fi.Error, fi.ErrorCode)
+		return nil, &SdfsError{Err: fi.GetError(), ErrorCode: fi.GetErrorCode()}
+	}
+	for i := 0; i < len(fi.InsertRecords); i++ {
+		z := hl[i]
+		if !fingers[z].dedup {
+			fingers[z].archive = fi.InsertRecords[i].Hashloc
+			fingers[z].dedup = !fi.InsertRecords[i].Inserted
+			fingers[z].compressedLength = fi.InsertRecords[i].CompressedLength
+			if fingers[z].archive == -1 && len(fingers[z].data) > 0 {
+				log.Warnf("Archive should not be -1")
+				return nil, fmt.Errorf("archive should not be -1")
 			}
 		}
 	}

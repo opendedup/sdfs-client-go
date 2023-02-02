@@ -642,11 +642,15 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 
 		log.Debugf("TLS Connecting to %s  disable_trust=%t mtls=%t\n", address, config.InsecureSkipVerify, creds.Mtls)
+		wsz := int32(240 * 1024 * 1024)
 		conn, err = grpc.DialContext(ctx, address, grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
-			grpc.WithTransportCredentials(tCreds))
+			grpc.WithTransportCredentials(tCreds),
+			grpc.WithInitialConnWindowSize(wsz),
+			grpc.WithInitialWindowSize(wsz))
+
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
@@ -656,7 +660,9 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 				grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 				grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
 				grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
-				grpc.WithTransportCredentials(tCreds))
+				grpc.WithTransportCredentials(tCreds),
+				grpc.WithInitialConnWindowSize(wsz),
+				grpc.WithInitialWindowSize(wsz))
 		}, 1, 20, 0)
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
@@ -664,13 +670,16 @@ func NewConnection(path string, dedupeEnabled bool, compress bool, volumeid int6
 		}
 
 	} else {
+		wsz := int32(240 * 1024 * 1024)
 		log.Debugf("Connecting to %s \n", address)
 		maxMsgSize := 240 * 1024 * 1024 //240 MB
 		interceptor = &SdfsInterceptor{address: address, credentials: creds, grpcSSL: useSSL}
 		conn, err = grpc.DialContext(ctx, address, grpc.WithInsecure(), grpc.WithBlock(),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize), grpc.MaxCallSendMsgSize(maxMsgSize)),
 			grpc.WithUnaryInterceptor(interceptor.clientInterceptor),
-			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor))
+			grpc.WithStreamInterceptor(interceptor.clientStreamInterceptor),
+			grpc.WithInitialConnWindowSize(wsz),
+			grpc.WithInitialWindowSize(wsz))
 		if err != nil {
 			log.Errorf("did not connect to %s : %v\n", path, err)
 			return nil, fmt.Errorf("unable to initialize sdfsClient")
