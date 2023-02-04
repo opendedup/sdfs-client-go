@@ -142,12 +142,14 @@ func NewDedupeEngine(ctx context.Context, p *pool.Pool, size, threads int, debug
 	//Start worker pool
 	pool.Start()
 	hashpool.Start()
+
 	client, err := p.Get(ctx)
-	defer client.Close()
 	if err != nil {
 		log.Errorf("unable to get client from pool %v", err)
 		return nil, err
 	}
+	defer client.Close()
+
 	hc := spb.NewStorageServiceClient(client)
 	fi, err := hc.HashingInfo(ctx, &spb.HashingInfoRequest{PvolumeID: volumeid})
 	if err != nil {
