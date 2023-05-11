@@ -8,7 +8,6 @@ require (
 	github.com/ahmetask/worker v1.3.1
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -35,11 +34,12 @@ require (
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
 	github.com/containerd/containerd v1.5.13 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/json-iterator/go v1.1.11 // indirect
